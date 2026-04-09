@@ -1,102 +1,147 @@
 # claude-usage-hub
 
-A lightweight, open-source tool for monitoring Claude Code token usage across your team. Designed for engineering managers and team leads who need visibility into how their developers use Claude Code subscriptions.
+A lightweight, open-source tool for monitoring Claude Code token usage with a web dashboard. Track your token consumption, cost estimates, session history, and model breakdown — all from your browser.
+
+Currently runs locally on a single machine. Team-wide monitoring across multiple developers is on the roadmap.
 
 ## Features
 
-- **Team-wide monitoring** - Aggregate token usage across all developers in your organization
-- **Privacy-first** - Only token metrics are collected; no conversation content ever leaves developer machines
-- **Web dashboard** - React-based UI with real-time charts, dark mode, and role-based access
-- **Per-developer views** - Developers see their own usage; admins see the full organization
-- **Session & project tracking** - Break down usage by Claude Code session and project (with opaque aliases for privacy)
+- **Web dashboard** - React-based UI with real-time charts and dark mode
+- **Privacy-first** - Only token metrics are stored; no conversation content is ever read
+- **Session tracking** - Break down usage by Claude Code session with human-readable names
+- **Project tracking** - Usage grouped by project with opaque aliases for privacy
 - **Model breakdown** - Track usage across Opus, Sonnet, and Haiku models
-- **Cost estimation** - Dynamic pricing via LiteLLM with tiered pricing support
-- **5-hour window tracking** - Monitor usage within Claude's billing windows
-- **Configurable alerts** - Email notifications when usage exceeds thresholds
-- **Cross-platform** - Collector agent runs on macOS, Linux, and Windows
-- **Lightweight** - SQLite database, no heavy infrastructure required
+- **Cost estimation** - Based on official Anthropic API pricing (April 2026)
+- **Multiple time ranges** - View 5-hour, 24-hour, 7-day, 30-day, or all-time usage
+- **Auto-refresh** - Dashboard updates every 60 seconds, collector re-scans every 5 minutes
+- **Dark mode** - Neon-inspired dark theme with cyan/purple/fuchsia accents
+- **Lightweight** - SQLite database, single process, no external dependencies
+
+## Screenshot
+
+The dashboard in dark mode showing token usage, model mix, and daily cost:
+
+<!-- TODO: Add screenshot -->
+
+## Quick Start
+
+```bash
+# Prerequisites: Node.js >= 18, pnpm >= 9
+
+git clone https://github.com/ARSPRodrigo/claude-usage-hub.git
+cd claude-usage-hub
+pnpm install
+pnpm build
+
+# Start the dashboard
+cd packages/cli
+npx tsx src/cli.ts start
+```
+
+Then open [http://localhost:8080](http://localhost:8080) in your browser.
+
+The collector automatically scans your `~/.claude/projects/` directory, ingests usage data into a local SQLite database, and serves the dashboard.
+
+### Options
+
+```bash
+npx tsx src/cli.ts start --port 3000        # Custom port (default: 8080)
+npx tsx src/cli.ts start --interval 10      # Re-scan every 10 minutes (default: 5)
+npx tsx src/cli.ts status                   # Show database and collector status
+```
 
 ## Architecture
 
 ```
-Developer Machines (macOS/Linux/Windows)        Central Server (Docker)
-┌─────────────────────────┐                    ┌──────────────────────┐
-│  Collector Agent         │   HTTPS POST      │  Hono API Server     │
-│  (background daemon)     │──────────────────>│  SQLite Database     │
-│                          │   every 30 min    │  React Dashboard     │
-│  Reads: ~/.claude/       │                    │  Alert Engine        │
-│  Sends: token counts     │                    └──────────────────────┘
-│  Never sends: content    │
-└─────────────────────────┘
+~/.claude/projects/**/*.jsonl
+        │
+        ▼
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  Collector        │────▶│  SQLite Database  │────▶│  React Dashboard │
+│  Scan + Parse     │     │  (~/.claude-      │     │  localhost:8080  │
+│  Dedup + Enrich   │     │   usage-hub/)     │     │                  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
 ```
 
-## Quick Start
+Everything runs in a single process on your machine. No network calls, no cloud, no Docker required.
 
-### 1. Deploy the server
+## Dashboard Pages
 
-```bash
-git clone https://github.com/ARSPRodrigo/claude-usage-hub.git
-cd claude-usage-hub
-cp .env.example .env
-# Edit .env with your settings
-docker compose up -d
-```
+**Dashboard** - Overview with stat cards, stacked area chart (tokens by model), donut chart (model mix), and daily cost bar chart. Supports 5h / 24h / 7d / 30d / All time ranges.
 
-### 2. Set up the admin account
+**Sessions** - Table of all Claude Code sessions with human-readable names, start time, duration, models used, token count, and cost. Paginated.
 
-Open `http://your-server:8080` and follow the setup wizard to create developer accounts and generate API keys.
-
-### 3. Install the collector on each developer machine
-
-```bash
-npx @claude-usage-hub/collector init --server https://your-server:8080 --api-key <key>
-npx @claude-usage-hub/collector install
-```
-
-The collector runs in the background and syncs usage metrics every 30 minutes.
+**Projects** - Usage grouped by project (aliased for privacy) with inline progress bars showing relative token consumption.
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Language | TypeScript |
-| Monorepo | pnpm + Turborepo |
-| Server | Hono |
+| Language | TypeScript (monorepo) |
+| Monorepo | pnpm workspaces + Turborepo |
+| Server | Hono + @hono/node-server |
 | Database | SQLite (better-sqlite3 + Drizzle ORM) |
-| Frontend | React + Vite + Tailwind CSS + shadcn/ui + Tremor |
-| Auth | JWT + API keys |
-| Deployment | Docker Compose |
+| Frontend | React + Vite + Tailwind CSS + Recharts |
+| Data fetching | TanStack Query |
+
+## How It Works
+
+1. **Scan** - The collector finds all `.jsonl` files in `~/.claude/projects/`, including subagent files
+2. **Parse** - Streams each file from a saved byte offset (incremental reads), extracts only `type=assistant` entries
+3. **Dedup** - Claude Code writes streaming entries (same ID, incrementing tokens). Only the final entry per `messageId:requestId` is kept
+4. **Enrich** - Calculates cost using official Anthropic pricing, generates opaque project aliases via SHA256
+5. **Store** - Inserts into SQLite with `INSERT OR IGNORE` for idempotency
+6. **Serve** - Hono API serves query endpoints, React dashboard visualizes the data
 
 ## Privacy
 
-The collector agent only extracts token usage metadata from Claude Code's local JSONL logs:
+The collector only extracts token usage metadata from Claude Code's local JSONL logs:
 
 - Session ID, timestamp, model name
 - Token counts (input, output, cache creation, cache read)
 - Service tier
 
-It **never** reads or transmits:
+It **never** reads or stores:
 
 - Conversation content (prompts or responses)
 - File paths or code
 - Git branches or repository names
 - Working directory paths
 
-Project names are replaced with opaque aliases (SHA256 hashes) before leaving the developer's machine.
+Project directories are hashed into opaque aliases before storage. Session IDs and project aliases are displayed as human-readable generated names (e.g., `golden-harbor-drift`).
 
-## Supported Plans
+## Pricing
 
-- Claude Pro
-- Claude Max (5x, 20x)
-- Claude Team (Standard, Premium)
-- Claude Enterprise
+Cost estimates are based on official Anthropic API pricing:
+
+| Model | Input | Output | Cache Write (1h) | Cache Read |
+|-------|-------|--------|-------------------|------------|
+| Opus 4.6 | $5/MTok | $25/MTok | $10/MTok | $0.50/MTok |
+| Sonnet 4.6 | $3/MTok | $15/MTok | $6/MTok | $0.30/MTok |
+| Haiku 4.5 | $1/MTok | $5/MTok | $2/MTok | $0.10/MTok |
+
+Source: [platform.claude.com/docs/en/about-claude/pricing](https://platform.claude.com/docs/en/about-claude/pricing)
+
+## Roadmap
+
+- [ ] Team mode: centralized server with collector agents pushing over HTTPS
+- [ ] Role-based access: developers see own data, admins see org-wide
+- [ ] Docker Compose deployment for team server
+- [ ] Email alerts for usage thresholds
+- [ ] Data retention configuration
+- [ ] Background daemon installers (launchd / systemd / Task Scheduler)
+- [ ] Cross-platform collector binaries via Node SEA
 
 ## Development
 
 ```bash
 # Prerequisites: Node.js >= 18, pnpm >= 9
 pnpm install
-pnpm dev
+pnpm build
+
+# Run server and dashboard in dev mode (two terminals)
+cd packages/server && pnpm dev          # Hono on :8080
+cd packages/dashboard && pnpm dev       # Vite on :5173 (proxies /api to :8080)
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
