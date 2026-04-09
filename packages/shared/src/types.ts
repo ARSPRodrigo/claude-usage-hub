@@ -95,3 +95,83 @@ export type AliasMap = Record<string, string>;
 
 /** User roles in the system. */
 export type UserRole = 'admin' | 'developer';
+
+// ---------------------------------------------------------------------------
+// API response types (used by server + dashboard)
+// ---------------------------------------------------------------------------
+
+/** Time range options for dashboard queries. */
+export type TimeRange = '5h' | '24h' | '7d' | '30d';
+
+/** App deployment mode. */
+export type AppMode = 'local' | 'team';
+
+/** Server configuration. */
+export interface ServerConfig {
+  mode: AppMode;
+  port: number;
+  dbPath: string;
+  retentionDays: number;
+  dashboardDistPath?: string;
+}
+
+/** Dashboard overview stats. */
+export interface DashboardStats {
+  tokensToday: number;
+  costToday: number;
+  activeSessions: number;
+  totalSessions: number;
+}
+
+/** A single point in a token usage timeseries. */
+export interface TimeseriesPoint {
+  bucket: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+  costUsd: number;
+}
+
+/** A single point in a daily cost trend. */
+export interface CostTrendPoint {
+  date: string;
+  costUsd: number;
+}
+
+/** Model usage breakdown entry. */
+export interface ModelMixEntry {
+  model: string;
+  totalTokens: number;
+  costUsd: number;
+  percentage: number;
+}
+
+/** A session summary row. */
+export interface SessionRow {
+  sessionId: string;
+  firstSeen: string;
+  lastSeen: string;
+  models: string[];
+  totalTokens: number;
+  costUsd: number;
+  projectAlias: string;
+}
+
+/** A project summary row. */
+export interface ProjectRow {
+  projectAlias: string;
+  sessionCount: number;
+  totalTokens: number;
+  costUsd: number;
+}
+
+/** Health check response. */
+export interface HealthResponse {
+  status: 'ok';
+  mode: AppMode;
+  entryCount: number;
+  version: string;
+}

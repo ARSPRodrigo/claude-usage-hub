@@ -50,3 +50,4 @@ temp/
 
 # Collector local data
 .claude-usage-hub/
+*.tsbuildinfo

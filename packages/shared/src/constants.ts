@@ -27,6 +27,22 @@ export const COLLECTOR_VERSION = '0.1.0';
 /** Session duration in hours (Claude's billing window). */
 export const SESSION_DURATION_HOURS = 5;
 
+/** Server default configuration values. */
+export const SERVER_DEFAULTS = {
+  PORT: 8080,
+  DB_PATH: '~/.claude-usage-hub/usage.db',
+  RETENTION_DAYS: 90,
+  MODE: 'local',
+} as const;
+
+/** Hours per time range for query filtering. */
+export const TIME_RANGE_HOURS: Record<string, number> = {
+  '5h': 5,
+  '24h': 24,
+  '7d': 168,
+  '30d': 720,
+};
+
 /** Plan types and their approximate token limits per 5-hour window. */
 export const PLAN_LIMITS: Record<string, { tokenLimit: number; displayName: string }> = {
   pro: { tokenLimit: 19_000, displayName: 'Pro' },
