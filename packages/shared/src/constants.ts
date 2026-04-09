@@ -27,9 +27,6 @@ export const COLLECTOR_VERSION = '0.1.0';
 /** Session duration in hours (Claude's billing window). */
 export const SESSION_DURATION_HOURS = 5;
 
-/** Tiered pricing threshold in tokens. Above this, higher rates apply. */
-export const TIERED_PRICING_THRESHOLD = 200_000;
-
 /** Plan types and their approximate token limits per 5-hour window. */
 export const PLAN_LIMITS: Record<string, { tokenLimit: number; displayName: string }> = {
   pro: { tokenLimit: 19_000, displayName: 'Pro' },
