@@ -6,7 +6,7 @@ import { CostChart } from '@/components/dashboard/CostChart';
 import { ModelMixChart } from '@/components/dashboard/ModelMixChart';
 import { useDashboardStats, useTokenTimeseries, useCostTrend, useModelMix } from '@/api/hooks';
 
-type TimeRange = '5h' | '24h' | '7d' | '30d';
+type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
 export function DashboardPage() {
   const [range, setRange] = useState<TimeRange>('7d');
@@ -19,7 +19,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-zinc-800 dark:text-zinc-200">Dashboard</h2>
+        <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Dashboard</h2>
         <TimeRangeSelector value={range} onChange={setRange} />
       </div>
 

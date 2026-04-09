@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from './client';
 
-type TimeRange = '5h' | '24h' | '7d' | '30d';
+type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
 interface DashboardStats {
   tokensToday: number;

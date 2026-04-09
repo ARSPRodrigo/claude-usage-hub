@@ -15,30 +15,36 @@ import { usageEntries } from './schema.js';
 
 /**
  * Get the ISO timestamp for "now minus N hours".
+ * Returns null for 'all' (no time filter).
  */
-function cutoffTime(range: TimeRange): string {
+function cutoffTime(range: TimeRange): string | null {
+  if (range === 'all') return null;
   const hours = TIME_RANGE_HOURS[range] ?? 24;
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
   return cutoff.toISOString();
 }
 
+/** Build a WHERE clause fragment, or empty string for 'all'. */
+function whereClause(range: TimeRange): { sql: string; params: string[] } {
+  const cutoff = cutoffTime(range);
+  if (!cutoff) return { sql: '', params: [] };
+  return { sql: 'WHERE timestamp >= ?', params: [cutoff] };
+}
+
 /**
  * Get the time bucket SQL expression based on range.
- * 5h → 15min, 24h → 1h, 7d → 6h, 30d → 1d
+ * 5h → 15min, 24h → 1h, 7d → 6h, 30d → 1d, all → 1d
  */
 function bucketExpression(range: TimeRange): string {
   switch (range) {
     case '5h':
-      // Floor to 15-minute intervals
       return `strftime('%Y-%m-%dT%H:', timestamp) || printf('%02d', (cast(strftime('%M', timestamp) as integer) / 15) * 15) || ':00Z'`;
     case '24h':
-      // Floor to hour
       return `strftime('%Y-%m-%dT%H:00:00Z', timestamp)`;
     case '7d':
-      // Floor to 6-hour intervals
       return `strftime('%Y-%m-%dT', timestamp) || printf('%02d', (cast(strftime('%H', timestamp) as integer) / 6) * 6) || ':00:00Z'`;
     case '30d':
-      // Floor to day
+    case 'all':
       return `strftime('%Y-%m-%dT00:00:00Z', timestamp)`;
     default:
       return `strftime('%Y-%m-%dT%H:00:00Z', timestamp)`;
@@ -93,7 +99,7 @@ export function insertEntries(entries: EnrichedEntry[]): number {
  */
 export function getDashboardStats(range: TimeRange): DashboardStats {
   const raw = getRawDb();
-  const cutoff = cutoffTime(range);
+  const where = whereClause(range);
 
   const row = raw
     .prepare(
@@ -103,10 +109,10 @@ export function getDashboardStats(range: TimeRange): DashboardStats {
       COALESCE(SUM(cost_usd), 0) as cost,
       COUNT(DISTINCT session_id) as sessions
     FROM usage_entries
-    WHERE timestamp >= ?
+    ${where.sql}
   `,
     )
-    .get(cutoff) as { tokens: number; cost: number; sessions: number };
+    .get(...where.params) as { tokens: number; cost: number; sessions: number };
 
   // Active sessions: sessions with activity in last 5 hours
   const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
@@ -129,7 +135,7 @@ export function getDashboardStats(range: TimeRange): DashboardStats {
  */
 export function getTokenTimeseries(range: TimeRange): TimeseriesPoint[] {
   const raw = getRawDb();
-  const cutoff = cutoffTime(range);
+  const where = whereClause(range);
   const bucket = bucketExpression(range);
 
   const rows = raw
@@ -145,12 +151,12 @@ export function getTokenTimeseries(range: TimeRange): TimeseriesPoint[] {
       SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens) as total_tokens,
       SUM(cost_usd) as cost_usd
     FROM usage_entries
-    WHERE timestamp >= ?
+    ${where.sql}
     GROUP BY bucket, model
     ORDER BY bucket ASC, model ASC
   `,
     )
-    .all(cutoff) as Array<{
+    .all(...where.params) as Array<{
     bucket: string;
     model: string;
     input_tokens: number;
@@ -178,7 +184,7 @@ export function getTokenTimeseries(range: TimeRange): TimeseriesPoint[] {
  */
 export function getCostTrend(range: TimeRange): CostTrendPoint[] {
   const raw = getRawDb();
-  const cutoff = cutoffTime(range);
+  const where = whereClause(range);
 
   const rows = raw
     .prepare(
@@ -187,12 +193,12 @@ export function getCostTrend(range: TimeRange): CostTrendPoint[] {
       date(timestamp) as date,
       SUM(cost_usd) as cost_usd
     FROM usage_entries
-    WHERE timestamp >= ?
+    ${where.sql}
     GROUP BY date(timestamp)
     ORDER BY date ASC
   `,
     )
-    .all(cutoff) as Array<{ date: string; cost_usd: number }>;
+    .all(...where.params) as Array<{ date: string; cost_usd: number }>;
 
   return rows.map((r) => ({
     date: r.date,
@@ -205,7 +211,7 @@ export function getCostTrend(range: TimeRange): CostTrendPoint[] {
  */
 export function getModelMix(range: TimeRange): ModelMixEntry[] {
   const raw = getRawDb();
-  const cutoff = cutoffTime(range);
+  const where = whereClause(range);
 
   const rows = raw
     .prepare(
@@ -215,12 +221,12 @@ export function getModelMix(range: TimeRange): ModelMixEntry[] {
       SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens) as total_tokens,
       SUM(cost_usd) as cost_usd
     FROM usage_entries
-    WHERE timestamp >= ?
+    ${where.sql}
     GROUP BY model
     ORDER BY total_tokens DESC
   `,
     )
-    .all(cutoff) as Array<{ model: string; total_tokens: number; cost_usd: number }>;
+    .all(...where.params) as Array<{ model: string; total_tokens: number; cost_usd: number }>;
 
   const grandTotal = rows.reduce((sum, r) => sum + r.total_tokens, 0);
 
@@ -241,7 +247,7 @@ export function getSessions(
   offset: number = 0,
 ): SessionRow[] {
   const raw = getRawDb();
-  const cutoff = cutoffTime(range);
+  const where = whereClause(range);
 
   const rows = raw
     .prepare(
@@ -255,13 +261,13 @@ export function getSessions(
       SUM(cost_usd) as cost_usd,
       project_alias
     FROM usage_entries
-    WHERE timestamp >= ?
+    ${where.sql}
     GROUP BY session_id
     ORDER BY MAX(timestamp) DESC
     LIMIT ? OFFSET ?
   `,
     )
-    .all(cutoff, limit, offset) as Array<{
+    .all(...where.params, limit, offset) as Array<{
     session_id: string;
     first_seen: string;
     last_seen: string;
@@ -287,7 +293,7 @@ export function getSessions(
  */
 export function getProjects(range: TimeRange): ProjectRow[] {
   const raw = getRawDb();
-  const cutoff = cutoffTime(range);
+  const where = whereClause(range);
 
   const rows = raw
     .prepare(
@@ -298,12 +304,12 @@ export function getProjects(range: TimeRange): ProjectRow[] {
       SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens) as total_tokens,
       SUM(cost_usd) as cost_usd
     FROM usage_entries
-    WHERE timestamp >= ?
+    ${where.sql}
     GROUP BY project_alias
     ORDER BY total_tokens DESC
   `,
     )
-    .all(cutoff) as Array<{
+    .all(...where.params) as Array<{
     project_alias: string;
     session_count: number;
     total_tokens: number;

@@ -44,10 +44,24 @@ export function formatDate(iso: string): string {
 }
 
 export function modelColor(model: string): string {
-  if (model.includes('opus')) return 'violet';
-  if (model.includes('sonnet')) return 'blue';
-  if (model.includes('haiku')) return 'emerald';
-  return 'zinc';
+  if (model.includes('opus')) return 'cyan';
+  if (model.includes('sonnet')) return 'purple';
+  if (model.includes('haiku')) return 'fuchsia';
+  return 'slate';
+}
+
+/** Badge CSS classes for model names. */
+export function modelBadgeClasses(name: string): string {
+  switch (name) {
+    case 'Opus':
+      return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-400';
+    case 'Sonnet':
+      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400';
+    case 'Haiku':
+      return 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/20 dark:text-fuchsia-400';
+    default:
+      return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400';
+  }
 }
 
 export function modelShortName(model: string): string {

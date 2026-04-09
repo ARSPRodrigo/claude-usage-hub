@@ -11,7 +11,7 @@ export default function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard');
 
   return (
-    <div className="h-screen flex flex-col bg-zinc-100 dark:bg-zinc-900">
+    <div className="h-screen flex flex-col bg-slate-50 dark:bg-dark-950">
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar activePage={activePage} onNavigate={setActivePage} />

@@ -12,7 +12,7 @@ import {
 } from '../db/repository.js';
 import { ingestPayload } from '../services/ingest.js';
 
-const VALID_RANGES = new Set(['5h', '24h', '7d', '30d']);
+const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
 
 function parseRange(c: { req: { query: (key: string) => string | undefined } }): TimeRange {
   const range = c.req.query('range') ?? '24h';

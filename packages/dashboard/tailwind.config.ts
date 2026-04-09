@@ -6,17 +6,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        opus: {
-          light: '#8b5cf6',   // violet-500
-          dark: '#a78bfa',    // violet-400
-        },
-        sonnet: {
-          light: '#3b82f6',   // blue-500
-          dark: '#60a5fa',    // blue-400
-        },
-        haiku: {
-          light: '#10b981',   // emerald-500
-          dark: '#34d399',    // emerald-400
+        // Dark theme scale (deep navy-purple)
+        dark: {
+          950: '#0a0e1a',  // page background
+          900: '#0f1325',  // sidebar, header
+          800: '#141829',  // cards
+          700: '#1e2540',  // elevated elements, hover
+          600: '#252d4a',  // borders
+          500: '#374166',  // subtle dividers, disabled
         },
       },
     },

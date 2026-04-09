@@ -101,7 +101,7 @@ export type UserRole = 'admin' | 'developer';
 // ---------------------------------------------------------------------------
 
 /** Time range options for dashboard queries. */
-export type TimeRange = '5h' | '24h' | '7d' | '30d';
+export type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
 /** App deployment mode. */
 export type AppMode = 'local' | 'team';

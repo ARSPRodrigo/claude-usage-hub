@@ -21,16 +21,16 @@ function StatCard({
   isLoading: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-5">
+    <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
       <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800">
-          <Icon className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+        <div className="p-2 rounded-lg bg-slate-100 dark:bg-dark-700">
+          <Icon className="h-4 w-4 text-slate-500 dark:text-cyan-400/70" />
         </div>
-        <span className="text-sm text-zinc-500 dark:text-zinc-400">{label}</span>
+        <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
       </div>
-      <p className="mt-3 text-2xl font-semibold text-zinc-800 dark:text-zinc-200">
+      <p className="mt-3 text-2xl font-semibold text-slate-800 dark:text-slate-200">
         {isLoading ? (
-          <span className="inline-block w-20 h-7 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          <span className="inline-block w-20 h-7 rounded bg-slate-200 dark:bg-dark-700 animate-pulse" />
         ) : (
           value
         )}

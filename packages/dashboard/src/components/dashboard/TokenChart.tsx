@@ -1,4 +1,16 @@
-import { AreaChart } from '@tremor/react';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
+import { MODEL_COLORS, getTheme, modelGradientId } from '@/lib/chart-theme';
+import { ChartTooltip } from './ChartTooltip';
+import { useDarkMode } from '@/lib/useDarkMode';
 import { modelShortName, formatTokens } from '@/lib/utils';
 
 interface TimeseriesPoint {
@@ -12,18 +24,15 @@ interface TokenChartProps {
   isLoading: boolean;
 }
 
-const MODEL_COLORS: Record<string, string> = {
-  Opus: '#8b5cf6',
-  Sonnet: '#3b82f6',
-  Haiku: '#10b981',
-};
-
 export function TokenChart({ data, isLoading }: TokenChartProps) {
+  const isDark = useDarkMode();
+  const theme = getTheme(isDark);
+
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-5 h-80">
+      <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80">
         <div className="h-full flex items-center justify-center">
-          <div className="w-full h-48 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          <div className="w-full h-48 rounded bg-slate-200 dark:bg-dark-700 animate-pulse" />
         </div>
       </div>
     );
@@ -38,7 +47,11 @@ export function TokenChart({ data, isLoading }: TokenChartProps) {
     bucketMap.set(point.bucket, existing);
   }
 
-  const models = [...new Set(data.map((p) => modelShortName(p.model)))];
+  const models = [...new Set(data.map((p) => modelShortName(p.model)))].sort((a, b) => {
+    const order = ['Opus', 'Sonnet', 'Haiku'];
+    return order.indexOf(a) - order.indexOf(b);
+  });
+
   const chartData = Array.from(bucketMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([bucket, values]) => ({
@@ -53,33 +66,68 @@ export function TokenChart({ data, isLoading }: TokenChartProps) {
 
   if (chartData.length === 0) {
     return (
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-5 h-80 flex items-center justify-center">
-        <p className="text-zinc-400 dark:text-zinc-500 text-sm">No data for this time range</p>
+      <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex items-center justify-center">
+        <p className="text-slate-400 dark:text-slate-500 text-sm">No data for this time range</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-5">
-      <h3 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-4">Token Usage</h3>
-      <AreaChart
-        className="h-64"
-        data={chartData}
-        index="date"
-        categories={models}
-        colors={models.map((m) => {
-          const hex = MODEL_COLORS[m];
-          if (hex === '#8b5cf6') return 'violet';
-          if (hex === '#3b82f6') return 'blue';
-          if (hex === '#10b981') return 'emerald';
-          return 'zinc';
-        })}
-        valueFormatter={(v) => formatTokens(v)}
-        showLegend={true}
-        showAnimation={true}
-        stack={true}
-        curveType="monotone"
-      />
+    <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+      <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-4">Token Usage</h3>
+      <ResponsiveContainer width="100%" height={260}>
+        <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+          <defs>
+            {models.map((model) => {
+              const color = MODEL_COLORS[model as keyof typeof MODEL_COLORS] ?? '#94a3b8';
+              return (
+                <linearGradient key={model} id={modelGradientId(model)} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0.05} />
+                </linearGradient>
+              );
+            })}
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fill: theme.axis, fontSize: 11 }}
+            axisLine={{ stroke: theme.grid }}
+            tickLine={false}
+            dy={8}
+          />
+          <YAxis
+            tick={{ fill: theme.axis, fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v) => formatTokens(v)}
+            width={55}
+          />
+          <Tooltip
+            content={<ChartTooltip isDark={isDark} valueFormatter={formatTokens} />}
+            cursor={{ stroke: theme.cursor, strokeWidth: 1 }}
+          />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: '12px', color: theme.axis, paddingTop: '12px' }}
+          />
+          {models.map((model) => {
+            const color = MODEL_COLORS[model as keyof typeof MODEL_COLORS] ?? '#94a3b8';
+            return (
+              <Area
+                key={model}
+                type="monotone"
+                dataKey={model}
+                stackId="1"
+                stroke={color}
+                strokeWidth={2}
+                fill={`url(#${modelGradientId(model)})`}
+              />
+            );
+          })}
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 }

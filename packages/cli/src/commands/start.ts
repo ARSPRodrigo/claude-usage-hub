@@ -2,7 +2,6 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { serve } from '@hono/node-server';
-import { serveStatic } from '@hono/node-server/serve-static';
 import { COLLECTOR_VERSION, SERVER_DEFAULTS } from '@claude-usage-hub/shared';
 import { runOnce } from '@claude-usage-hub/collector';
 import { loadConfig, saveConfig, generateDefaultConfig } from '@claude-usage-hub/collector/config';
@@ -78,14 +77,36 @@ export async function startCommand(opts: StartOptions): Promise<void> {
   const dashboardDist = findDashboardDist();
 
   if (dashboardDist) {
-    // Serve static assets
-    app.use('/assets/*', serveStatic({ root: dashboardDist }));
+    const { readFileSync, existsSync } = await import('node:fs');
+    const { join } = await import('node:path');
 
-    // SPA fallback: serve index.html for non-API routes
-    const { readFileSync } = await import('node:fs');
-    const indexHtml = readFileSync(resolve(dashboardDist, 'index.html'), 'utf-8');
-    app.get('*', (c) => {
-      if (c.req.path.startsWith('/api/')) return c.notFound();
+    // Serve static files (assets, favicon, etc.)
+    app.get('*', (c, next) => {
+      const urlPath = c.req.path;
+
+      // Skip API routes
+      if (urlPath.startsWith('/api/')) return next();
+
+      // Try to serve a static file
+      const filePath = join(dashboardDist, urlPath === '/' ? 'index.html' : urlPath);
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath);
+        const ext = filePath.split('.').pop() ?? '';
+        const mimeTypes: Record<string, string> = {
+          html: 'text/html',
+          js: 'application/javascript',
+          css: 'text/css',
+          svg: 'image/svg+xml',
+          png: 'image/png',
+          ico: 'image/x-icon',
+          json: 'application/json',
+        };
+        const contentType = mimeTypes[ext] ?? 'application/octet-stream';
+        return c.body(content, 200, { 'Content-Type': contentType });
+      }
+
+      // SPA fallback: serve index.html for unmatched routes
+      const indexHtml = readFileSync(join(dashboardDist, 'index.html'), 'utf-8');
       return c.html(indexHtml);
     });
   }
