@@ -8,9 +8,11 @@ import { LoginPage } from '@/pages/LoginPage';
 import { AcceptInvitePage } from '@/pages/AcceptInvitePage';
 import { SetupPage } from '@/pages/SetupPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { AdminOrgPage } from '@/pages/AdminOrgPage';
+import { AdminTeamPage } from '@/pages/AdminTeamPage';
 import { getToken, getUser } from '@/api/client';
 
-type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'profile';
+type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'profile' | 'admin-org' | 'admin-team';
 
 function usePathname(): string {
   const [pathname, setPathname] = useState(window.location.pathname);
@@ -51,12 +53,21 @@ export default function App() {
     pathname === '/profile' ? 'profile' :
     pathname === '/sessions' ? 'sessions' :
     pathname === '/projects' ? 'projects' :
+    pathname === '/admin/org' ? 'admin-org' :
+    pathname === '/admin/team' ? 'admin-team' :
     activePage;
 
   function navigate(page: InnerPage) {
     setActivePage(page);
-    const path = page === 'dashboard' ? '/' : `/${page}`;
-    window.history.pushState({}, '', path);
+    const pathMap: Record<InnerPage, string> = {
+      dashboard: '/',
+      sessions: '/sessions',
+      projects: '/projects',
+      profile: '/profile',
+      'admin-org': '/admin/org',
+      'admin-team': '/admin/team',
+    };
+    window.history.pushState({}, '', pathMap[page]);
   }
 
   return (
@@ -70,6 +81,8 @@ export default function App() {
             {currentPage === 'sessions' && <SessionsPage />}
             {currentPage === 'projects' && <ProjectsPage />}
             {currentPage === 'profile' && <ProfilePage />}
+            {currentPage === 'admin-org' && <AdminOrgPage />}
+            {currentPage === 'admin-team' && <AdminTeamPage />}
           </div>
         </main>
       </div>

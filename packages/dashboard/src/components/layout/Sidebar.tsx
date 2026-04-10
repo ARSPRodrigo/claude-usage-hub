@@ -1,29 +1,35 @@
-import { BarChart3, FolderOpen, Clock, Github, Database, RefreshCw, User } from 'lucide-react';
+import { BarChart3, FolderOpen, Clock, Github, Database, RefreshCw, User, Users, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
+import { getUser } from '@/api/client';
 
-type Page = 'dashboard' | 'sessions' | 'projects' | 'profile';
+type Page = 'dashboard' | 'sessions' | 'projects' | 'profile' | 'admin-org' | 'admin-team';
 
-const navItems: { id: Page; label: string; icon: typeof BarChart3 }[] = [
+const navItems: { id: Page; label: string; icon: typeof BarChart3; adminOnly?: boolean }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
   { id: 'projects', label: 'Projects', icon: FolderOpen },
   { id: 'sessions', label: 'Sessions', icon: Clock },
   { id: 'profile', label: 'Profile', icon: User },
+  { id: 'admin-org', label: 'Org Overview', icon: Building2, adminOnly: true },
+  { id: 'admin-team', label: 'Team', icon: Users, adminOnly: true },
 ];
 
 interface SidebarProps {
-  activePage: 'dashboard' | 'sessions' | 'projects' | 'profile';
-  onNavigate: (page: 'dashboard' | 'sessions' | 'projects' | 'profile') => void;
+  activePage: Page;
+  onNavigate: (page: Page) => void;
 }
 
 export function Sidebar({ activePage, onNavigate }: SidebarProps) {
   const health = useHealth();
+  const user = getUser();
+  const isAdmin = user?.role === 'admin';
+  const visibleItems = navItems.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <nav className="w-52 border-r border-slate-200 dark:border-dark-600 bg-slate-100 dark:bg-dark-900 flex flex-col flex-shrink-0">
       {/* Navigation */}
       <ul className="space-y-1 px-3 py-4 flex-1">
-        {navItems.map(({ id, label, icon: Icon }) => (
+        {visibleItems.map(({ id, label, icon: Icon }) => (
           <li key={id}>
             <button
               onClick={() => onNavigate(id)}

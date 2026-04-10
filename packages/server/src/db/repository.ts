@@ -567,3 +567,35 @@ export function getLastEntryTimestamp(): string | null {
   };
   return row.ts;
 }
+
+export interface DeveloperStatRow {
+  developerId: string;
+  email: string;
+  displayName: string;
+  totalTokens: number;
+  costUsd: number;
+  entryCount: number;
+  lastSeen: string | null;
+}
+
+/**
+ * Per-developer usage breakdown — admin only.
+ */
+export function getDeveloperStats(): DeveloperStatRow[] {
+  const raw = getRawDb();
+  return raw.prepare(`
+    SELECT
+      u.developer_id   AS developerId,
+      u.email          AS email,
+      u.display_name   AS displayName,
+      COALESCE(SUM(e.input_tokens + e.output_tokens + e.cache_creation_tokens + e.cache_read_tokens), 0) AS totalTokens,
+      COALESCE(SUM(e.cost_usd), 0)  AS costUsd,
+      COUNT(e.id)                   AS entryCount,
+      MAX(e.timestamp)              AS lastSeen
+    FROM users u
+    LEFT JOIN usage_entries e ON e.developer_id = u.developer_id
+    WHERE u.role = 'developer'
+    GROUP BY u.id
+    ORDER BY costUsd DESC
+  `).all() as DeveloperStatRow[];
+}

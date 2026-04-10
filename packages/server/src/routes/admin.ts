@@ -13,6 +13,7 @@ import {
 } from '../db/auth-repository.js';
 import { hashPassword, generateApiKey } from '../services/auth-utils.js';
 import { invitationRoutes } from './invitations.js';
+import { getDeveloperStats, getDashboardStats } from '../db/repository.js';
 
 const admin = new Hono<AppEnv>();
 
@@ -131,5 +132,15 @@ admin.delete('/api-keys/:id', (c) => {
 
 // Mount invitation management under /invitations
 admin.route('/invitations', invitationRoutes);
+
+/** GET /api/v1/admin/stats/developers — per-developer usage breakdown */
+admin.get('/stats/developers', (c) => {
+  return c.json(getDeveloperStats());
+});
+
+/** GET /api/v1/admin/stats/overview — org-wide totals */
+admin.get('/stats/overview', (c) => {
+  return c.json(getDashboardStats('all'));
+});
 
 export { admin as adminRoutes };
