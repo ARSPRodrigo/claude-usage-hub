@@ -24,11 +24,29 @@ function cutoffTime(range: TimeRange): string | null {
   return cutoff.toISOString();
 }
 
-/** Build a WHERE clause fragment, or empty string for 'all'. */
-function whereClause(range: TimeRange): { sql: string; params: string[] } {
+/** Build a WHERE clause fragment with optional developer scoping. */
+function whereClause(range: TimeRange, developerId?: string): { sql: string; params: string[] } {
+  const conditions: string[] = [];
+  const params: string[] = [];
+
   const cutoff = cutoffTime(range);
-  if (!cutoff) return { sql: '', params: [] };
-  return { sql: 'WHERE timestamp >= ?', params: [cutoff] };
+  if (cutoff) {
+    conditions.push('timestamp >= ?');
+    params.push(cutoff);
+  }
+  if (developerId) {
+    conditions.push('developer_id = ?');
+    params.push(developerId);
+  }
+
+  const sql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  return { sql, params };
+}
+
+/** Build a developer filter condition (for queries that already have a WHERE). */
+function devFilter(developerId?: string): { sql: string; params: string[] } {
+  if (!developerId) return { sql: '', params: [] };
+  return { sql: 'AND developer_id = ?', params: [developerId] };
 }
 
 /**
@@ -97,9 +115,9 @@ export function insertEntries(entries: EnrichedEntry[]): number {
 /**
  * Get dashboard overview stats for a time range.
  */
-export function getDashboardStats(range: TimeRange): DashboardStats {
+export function getDashboardStats(range: TimeRange, developerId?: string): DashboardStats {
   const raw = getRawDb();
-  const where = whereClause(range);
+  const where = whereClause(range, developerId);
 
   const row = raw
     .prepare(
@@ -116,11 +134,12 @@ export function getDashboardStats(range: TimeRange): DashboardStats {
 
   // Active sessions: sessions with activity in last 5 hours
   const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+  const dev = devFilter(developerId);
   const activeRow = raw
     .prepare(
-      `SELECT COUNT(DISTINCT session_id) as active FROM usage_entries WHERE timestamp >= ?`,
+      `SELECT COUNT(DISTINCT session_id) as active FROM usage_entries WHERE timestamp >= ? ${dev.sql}`,
     )
-    .get(fiveHoursAgo) as { active: number };
+    .get(fiveHoursAgo, ...dev.params) as { active: number };
 
   return {
     tokensToday: row.tokens,
@@ -133,9 +152,9 @@ export function getDashboardStats(range: TimeRange): DashboardStats {
 /**
  * Get token usage timeseries grouped by time bucket and model.
  */
-export function getTokenTimeseries(range: TimeRange): TimeseriesPoint[] {
+export function getTokenTimeseries(range: TimeRange, developerId?: string): TimeseriesPoint[] {
   const raw = getRawDb();
-  const where = whereClause(range);
+  const where = whereClause(range, developerId);
   const bucket = bucketExpression(range);
 
   const rows = raw
@@ -182,9 +201,9 @@ export function getTokenTimeseries(range: TimeRange): TimeseriesPoint[] {
 /**
  * Get daily cost trend.
  */
-export function getCostTrend(range: TimeRange): CostTrendPoint[] {
+export function getCostTrend(range: TimeRange, developerId?: string): CostTrendPoint[] {
   const raw = getRawDb();
-  const where = whereClause(range);
+  const where = whereClause(range, developerId);
 
   const rows = raw
     .prepare(
@@ -209,9 +228,9 @@ export function getCostTrend(range: TimeRange): CostTrendPoint[] {
 /**
  * Get model usage breakdown.
  */
-export function getModelMix(range: TimeRange): ModelMixEntry[] {
+export function getModelMix(range: TimeRange, developerId?: string): ModelMixEntry[] {
   const raw = getRawDb();
-  const where = whereClause(range);
+  const where = whereClause(range, developerId);
 
   const rows = raw
     .prepare(
@@ -245,9 +264,10 @@ export function getSessions(
   range: TimeRange,
   limit: number = 50,
   offset: number = 0,
+  developerId?: string,
 ): SessionRow[] {
   const raw = getRawDb();
-  const where = whereClause(range);
+  const where = whereClause(range, developerId);
 
   const rows = raw
     .prepare(
@@ -291,9 +311,9 @@ export function getSessions(
 /**
  * Get project summaries.
  */
-export function getProjects(range: TimeRange): ProjectRow[] {
+export function getProjects(range: TimeRange, developerId?: string): ProjectRow[] {
   const raw = getRawDb();
-  const where = whereClause(range);
+  const where = whereClause(range, developerId);
 
   const rows = raw
     .prepare(
@@ -327,8 +347,9 @@ export function getProjects(range: TimeRange): ProjectRow[] {
 /**
  * Get per-model breakdown for a single session.
  */
-export function getSessionDetail(sessionId: string): SessionDetailRow[] {
+export function getSessionDetail(sessionId: string, developerId?: string): SessionDetailRow[] {
   const raw = getRawDb();
+  const dev = devFilter(developerId);
 
   const rows = raw
     .prepare(
@@ -342,12 +363,12 @@ export function getSessionDetail(sessionId: string): SessionDetailRow[] {
       SUM(cost_usd) as cost_usd,
       COUNT(*) as entry_count
     FROM usage_entries
-    WHERE session_id = ?
+    WHERE session_id = ? ${dev.sql}
     GROUP BY model
     ORDER BY cost_usd DESC
   `,
     )
-    .all(sessionId) as Array<{
+    .all(sessionId, ...dev.params) as Array<{
     model: string;
     input_tokens: number;
     output_tokens: number;
@@ -371,9 +392,9 @@ export function getSessionDetail(sessionId: string): SessionDetailRow[] {
 /**
  * Get per-model breakdown for a single project.
  */
-export function getProjectDetail(projectAlias: string, range: TimeRange): SessionDetailRow[] {
+export function getProjectDetail(projectAlias: string, range: TimeRange, developerId?: string): SessionDetailRow[] {
   const raw = getRawDb();
-  const where = whereClause(range);
+  const where = whereClause(range, developerId);
   const whereStr = where.sql
     ? `${where.sql} AND project_alias = ?`
     : 'WHERE project_alias = ?';
@@ -420,9 +441,9 @@ export function getProjectDetail(projectAlias: string, range: TimeRange): Sessio
 /**
  * Get cost breakdown by token type for a time range.
  */
-export function getCostBreakdown(range: TimeRange): CostBreakdown {
+export function getCostBreakdown(range: TimeRange, developerId?: string): CostBreakdown {
   const raw = getRawDb();
-  const where = whereClause(range);
+  const where = whereClause(range, developerId);
 
   const row = raw
     .prepare(
@@ -512,9 +533,9 @@ export function getCostBreakdown(range: TimeRange): CostBreakdown {
 /**
  * Get session count for a time range (for pagination).
  */
-export function getSessionCount(range: TimeRange): number {
+export function getSessionCount(range: TimeRange, developerId?: string): number {
   const raw = getRawDb();
-  const where = whereClause(range);
+  const where = whereClause(range, developerId);
 
   const row = raw
     .prepare(

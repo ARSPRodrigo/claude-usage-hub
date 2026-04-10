@@ -49,6 +49,30 @@ export function saveConfig(config: CollectorConfig): void {
   writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
 }
 
+const LAST_UPLOAD_FILE = 'last-upload.json';
+
+/** Persist the last successful upload timestamp. */
+export function saveLastUploadTime(): void {
+  ensureConfigDir();
+  writeFileSync(
+    getConfigPath(LAST_UPLOAD_FILE),
+    JSON.stringify({ timestamp: new Date().toISOString() }),
+    'utf-8',
+  );
+}
+
+/** Get the last successful upload timestamp, or null if never uploaded. */
+export function getLastUploadTime(): string | null {
+  const p = getConfigPath(LAST_UPLOAD_FILE);
+  if (!existsSync(p)) return null;
+  try {
+    const data = JSON.parse(readFileSync(p, 'utf-8')) as { timestamp: string };
+    return data.timestamp;
+  } catch {
+    return null;
+  }
+}
+
 /** Generate a default config with random salt and developerId. */
 export function generateDefaultConfig(
   serverUrl: string,

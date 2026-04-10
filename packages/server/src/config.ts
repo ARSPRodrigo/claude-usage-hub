@@ -23,3 +23,26 @@ export function loadServerConfig(overrides?: Partial<ServerConfig>): ServerConfi
     dashboardDistPath: overrides?.dashboardDistPath,
   };
 }
+
+/** Auth configuration for team mode. */
+export interface AuthConfig {
+  jwtSecret: string;
+  adminEmail: string;
+  adminPassword: string;
+}
+
+/**
+ * Load auth configuration from environment variables.
+ * Throws if JWT_SECRET is missing or still the placeholder value.
+ */
+export function loadAuthConfig(): AuthConfig {
+  const jwtSecret = process.env['JWT_SECRET'];
+  if (!jwtSecret || jwtSecret === 'change-me-to-a-random-string') {
+    throw new Error('JWT_SECRET must be set to a secure random string in team mode');
+  }
+  return {
+    jwtSecret,
+    adminEmail: process.env['ADMIN_EMAIL'] ?? '',
+    adminPassword: process.env['ADMIN_PASSWORD'] ?? '',
+  };
+}

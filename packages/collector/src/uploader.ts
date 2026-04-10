@@ -73,6 +73,42 @@ function saveToOutbox(payload: IngestPayload): void {
   console.error(`Payload saved to outbox: ${filename}`);
 }
 
+/** Return the number of payloads currently waiting in the outbox. */
+export function getOutboxCount(): number {
+  const dir = join(getConfigPath(DEFAULTS.OUTBOX_DIR));
+  if (!existsSync(dir)) return 0;
+  try {
+    return readdirSync(dir).filter((f) => f.endsWith('.json')).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Check server connectivity and API key validity.
+ * Returns { ok: true } on success or { ok: false, error: string } on failure.
+ */
+export async function checkConnectivity(
+  serverUrl: string,
+  apiKey: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const url = `${serverUrl.replace(/\/$/, '')}/api/v1/health`;
+  try {
+    const response = await fetch(url, {
+      headers: { 'X-API-Key': apiKey },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (response.ok) return { ok: true };
+    if (response.status === 401) return { ok: false, error: 'Invalid API key (401 Unauthorized)' };
+    return { ok: false, error: `Server returned ${response.status}` };
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      return { ok: false, error: 'Connection timed out after 5s' };
+    }
+    return { ok: false, error: `Cannot reach server: ${err instanceof Error ? err.message : err}` };
+  }
+}
+
 /**
  * Retry any payloads sitting in the outbox.
  * Returns the number of successfully uploaded payloads.

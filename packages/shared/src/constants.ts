@@ -43,6 +43,12 @@ export const TIME_RANGE_HOURS: Record<string, number> = {
   '30d': 720,
 };
 
+/** API key prefix for identification. */
+export const API_KEY_PREFIX = 'chub_';
+
+/** JWT token expiration in seconds (24 hours). */
+export const JWT_EXPIRATION_SECONDS = 86400;
+
 /** Plan types and their approximate token limits per 5-hour window. */
 export const PLAN_LIMITS: Record<string, { tokenLimit: number; displayName: string }> = {
   pro: { tokenLimit: 19_000, displayName: 'Pro' },

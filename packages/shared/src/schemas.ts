@@ -138,3 +138,27 @@ export const collectorConfigSchema = z.object({
   intervalMinutes: z.number().int().min(1).default(30),
   claudeDataPath: z.string().default('~/.claude/projects'),
 });
+
+// ---------------------------------------------------------------------------
+// Auth schemas (team mode)
+// ---------------------------------------------------------------------------
+
+/** Login request validation. */
+export const loginRequestSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+/** Create API key request validation. */
+export const createApiKeySchema = z.object({
+  userId: z.string().min(1),
+  label: z.string().min(1).max(100),
+});
+
+/** Create developer request validation. */
+export const createDeveloperSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  displayName: z.string().min(1).max(100),
+  developerId: z.string().min(1).max(100),
+});

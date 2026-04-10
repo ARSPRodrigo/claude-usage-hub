@@ -195,3 +195,83 @@ export interface HealthResponse {
   entryCount: number;
   version: string;
 }
+
+// ---------------------------------------------------------------------------
+// Auth types (team mode)
+// ---------------------------------------------------------------------------
+
+/** A registered user (admin or developer). */
+export interface User {
+  id: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  developerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** API key record (hash stored, never the raw key). */
+export interface ApiKey {
+  id: string;
+  userId: string;
+  keyPrefix: string;
+  keyHash: string;
+  label: string;
+  developerId: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+/** JWT payload stored in the token. */
+export interface JwtPayload {
+  sub: string;
+  email: string;
+  role: UserRole;
+  developerId: string;
+  iat: number;
+  exp: number;
+}
+
+/** Login request body. */
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+/** Login response body. */
+export interface LoginResponse {
+  token: string;
+  user: Omit<User, 'createdAt' | 'updatedAt'>;
+}
+
+/** Create API key request. */
+export interface CreateApiKeyRequest {
+  userId: string;
+  label: string;
+}
+
+/** Create API key response (includes the raw key, shown once). */
+export interface CreateApiKeyResponse {
+  id: string;
+  key: string;
+  keyPrefix: string;
+  label: string;
+  developerId: string;
+}
+
+/** Create developer request. */
+export interface CreateDeveloperRequest {
+  email: string;
+  password: string;
+  displayName: string;
+  developerId: string;
+}
+
+/** Auth context set by middleware on each request. */
+export interface AuthContext {
+  userId: string;
+  email: string;
+  role: UserRole;
+  developerId: string;
+}

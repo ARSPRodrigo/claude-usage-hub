@@ -5,7 +5,8 @@ import type { ServerConfig } from '@claude-usage-hub/shared';
 import { createApp } from './app.js';
 import { createDb } from './db/connection.js';
 import { runMigrations } from './db/migrate.js';
-import { loadServerConfig } from './config.js';
+import { loadServerConfig, loadAuthConfig } from './config.js';
+import { setJwtSecret } from './middleware/auth.js';
 
 /**
  * Start the Hono server with SQLite database.
@@ -17,15 +18,21 @@ export async function startServer(
 ): Promise<{ close: () => void; config: ServerConfig }> {
   const config = loadServerConfig(configOverrides);
 
+  // In team mode, load auth config and set JWT secret
+  if (config.mode === 'team') {
+    const authConfig = loadAuthConfig();
+    setJwtSecret(authConfig.jwtSecret);
+  }
+
   // Ensure DB directory exists
   mkdirSync(dirname(config.dbPath), { recursive: true });
 
   // Initialize database
   const { raw } = createDb(config.dbPath);
-  runMigrations(raw);
+  runMigrations(raw, config.mode);
 
-  // Create app
-  const app = createApp();
+  // Create app with mode
+  const app = createApp(config.mode);
 
   // Start server — bind to localhost only in local mode
   const server = serve({

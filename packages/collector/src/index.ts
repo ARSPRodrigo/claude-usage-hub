@@ -5,7 +5,7 @@ import { loadCursors, saveCursors, getOffset, setOffset, pruneCursors } from './
 import { dedup, loadSeenHashes, saveSeenHashes } from './dedup.js';
 import { aggregate } from './aggregator.js';
 import { readStatsSummary } from './stats-reader.js';
-import { loadConfig } from './config.js';
+import { loadConfig, saveLastUploadTime } from './config.js';
 
 export interface RunOnceResult {
   payload: IngestPayload;
@@ -129,14 +129,25 @@ export async function runLoop(): Promise<never> {
           `${result.stats.newEntries} new entries`,
       );
 
-      // Upload if there are entries and server is configured
-      if (result.payload.entries.length > 0 && config.serverUrl) {
-        const { upload } = await import('./uploader.js');
-        const success = await upload(result.payload, config.serverUrl, config.apiKey);
-        if (success) {
-          console.log(`  Uploaded ${result.payload.entries.length} entries`);
-        } else {
-          console.error('  Upload failed (saved to outbox)');
+      // Upload to server if configured
+      if (config.serverUrl) {
+        const { upload, retryOutbox } = await import('./uploader.js');
+
+        // Retry any previously failed payloads first
+        const retried = await retryOutbox(config.serverUrl, config.apiKey);
+        if (retried > 0) {
+          console.log(`  Retried ${retried} outbox payload(s)`);
+        }
+
+        // Upload new entries
+        if (result.payload.entries.length > 0) {
+          const success = await upload(result.payload, config.serverUrl, config.apiKey);
+          if (success) {
+            saveLastUploadTime();
+            console.log(`  Uploaded ${result.payload.entries.length} entries`);
+          } else {
+            console.error('  Upload failed (saved to outbox)');
+          }
         }
       }
     } catch (err) {
