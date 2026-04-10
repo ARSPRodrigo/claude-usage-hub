@@ -5,7 +5,8 @@ import { useProjects, useProjectDetail } from '@/api/hooks';
 import { formatTokens, formatCost } from '@/lib/utils';
 import { getDisplayName } from '@/lib/name-generator';
 import { ApiError } from '@/components/ApiError';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { downloadCsv } from '@/lib/csv-export';
+import { ChevronDown, ChevronUp, Download } from 'lucide-react';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
@@ -25,7 +26,7 @@ export function ProjectsPage() {
           <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Projects</h2>
           <TimeRangeSelector value={range} onChange={setRange} />
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+        <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
           <ApiError message="Could not load projects." onRetry={() => refetch()} />
         </div>
       </div>
@@ -36,16 +37,38 @@ export function ProjectsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Projects</h2>
-        <TimeRangeSelector
-          value={range}
-          onChange={(r) => {
-            setRange(r);
-            setExpandedProject(null);
-          }}
-        />
+        <div className="flex items-center gap-2">
+          {data && data.length > 0 && (
+            <button
+              onClick={() => {
+                downloadCsv(
+                  `projects-${range}.csv`,
+                  ['Project', 'Sessions', 'Tokens', 'Cost'],
+                  data.map((p) => [
+                    getDisplayName(p.projectAlias),
+                    String(p.sessionCount),
+                    String(p.totalTokens),
+                    p.costUsd.toFixed(4),
+                  ]),
+                );
+              }}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-700 text-slate-400 dark:text-slate-500 transition-colors"
+              title="Export CSV"
+            >
+              <Download className="h-4 w-4" />
+            </button>
+          )}
+          <TimeRangeSelector
+            value={range}
+            onChange={(r) => {
+              setRange(r);
+              setExpandedProject(null);
+            }}
+          />
+        </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 overflow-hidden">
+      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 dark:border-dark-600">
@@ -98,7 +121,7 @@ export function ProjectsPage() {
                         </td>
                         <td className="px-3 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="flex-1 h-2 rounded-full bg-slate-200 dark:bg-dark-700 overflow-hidden">
+                            <div className="flex-1 h-2 rounded-full bg-slate-300 dark:bg-dark-700 overflow-hidden">
                               <div
                                 className="h-full rounded-full bg-cyan-500 dark:bg-cyan-400 transition-all duration-500"
                                 style={{ width: `${barWidth}%` }}

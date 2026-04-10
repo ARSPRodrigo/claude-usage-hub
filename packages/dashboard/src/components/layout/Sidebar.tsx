@@ -1,4 +1,4 @@
-import { BarChart3, FolderOpen, Clock, Github, Database } from 'lucide-react';
+import { BarChart3, FolderOpen, Clock, Github, Database, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
 
@@ -29,7 +29,7 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 activePage === id
-                  ? 'bg-cyan-50 dark:bg-cyan-900/15 text-cyan-700 dark:text-cyan-400'
+                  ? 'bg-cyan-100 dark:bg-cyan-900/15 text-cyan-700 dark:text-cyan-400'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-dark-700 hover:text-slate-800 dark:hover:text-slate-200',
               )}
             >
@@ -51,6 +51,21 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
               : '...'}
           </span>
         </div>
+
+        {/* Last collected */}
+        {health.data?.lastEntry && (
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-500">
+            <RefreshCw className="h-3 w-3" />
+            <span>
+              {new Date(health.data.lastEntry).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+          </div>
+        )}
 
         {/* GitHub link */}
         <a

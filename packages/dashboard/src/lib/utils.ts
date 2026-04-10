@@ -50,18 +50,27 @@ export function modelColor(model: string): string {
   return 'slate';
 }
 
-/** Badge CSS classes for model names. */
-export function modelBadgeClasses(name: string): string {
-  switch (name) {
-    case 'Opus':
-      return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-400';
-    case 'Sonnet':
-      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400';
-    case 'Haiku':
-      return 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/20 dark:text-fuchsia-400';
-    default:
-      return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400';
-  }
+/**
+ * Get inline style for a model badge.
+ * Uses the same hex colors as the charts for consistency.
+ */
+export function modelBadgeStyle(name: string, isDark: boolean): { backgroundColor: string; color: string } {
+  const darkColors: Record<string, string> = {
+    Opus: '#22d3ee',
+    Sonnet: '#a855f7',
+    Haiku: '#d946ef',
+  };
+  const lightColors: Record<string, string> = {
+    Opus: '#0891b2',
+    Sonnet: '#7c3aed',
+    Haiku: '#c026d3',
+  };
+
+  const color = (isDark ? darkColors : lightColors)[name] ?? '#94a3b8';
+  return {
+    backgroundColor: `${color}${isDark ? '20' : '15'}`,
+    color,
+  };
 }
 
 export function modelShortName(model: string): string {

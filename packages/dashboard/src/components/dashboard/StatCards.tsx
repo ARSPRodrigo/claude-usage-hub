@@ -30,7 +30,7 @@ function StatCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+    <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-lg bg-slate-100 dark:bg-dark-700">
           <Icon className="h-4 w-4 text-slate-500 dark:text-cyan-400/70" />

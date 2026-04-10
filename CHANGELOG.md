@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.2-alpha] - 2026-04-10
+
+### Added
+- **CSV export** — download sessions and projects data as CSV files
+- **Last collected timestamp** — sidebar footer shows when data was last collected
+- **Session drill-down** — click any session to see per-model token breakdown
+- **Project drill-down** — click any project to see per-model breakdown
+- **Cost breakdown** — Est. Cost card shows stacked bar of input/output/cache costs
+- **Welcome card** — first-run experience when no usage data exists
+- **70 tests** — pricing, schemas, parser, dedup, privacy, repository, formatters, name generator
+
+### Fixed
+- Light mode: card borders more visible, badges softer, chart colors deeper
+- Light mode: empty state text contrast improved
+- Chart colors adapt to light/dark mode (neon on dark, deeper shades on light)
+- Status command ESM require() crash
+- Sessions pagination shows total count
+
+### Changed
+- Est. Cost breakdown bar shows only the bar (hover for details), no text clutter
+- Sidebar nav order: Dashboard > Projects > Sessions
+
 ## [0.1.0-alpha] - 2026-04-10
 
 ### Added

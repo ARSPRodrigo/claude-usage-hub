@@ -535,3 +535,14 @@ export function getEntryCount(): number {
   };
   return row.count;
 }
+
+/**
+ * Get the timestamp of the most recent entry.
+ */
+export function getLastEntryTimestamp(): string | null {
+  const raw = getRawDb();
+  const row = raw.prepare('SELECT MAX(timestamp) as ts FROM usage_entries').get() as {
+    ts: string | null;
+  };
+  return row.ts;
+}

@@ -1,4 +1,5 @@
-import { formatTokens, formatCost, modelShortName, modelBadgeClasses } from '@/lib/utils';
+import { formatTokens, formatCost, modelShortName, modelBadgeStyle } from '@/lib/utils';
+import { useDarkMode } from '@/lib/useDarkMode';
 
 interface ModelRow {
   model: string;
@@ -16,6 +17,8 @@ interface ModelBreakdownTableProps {
 }
 
 export function ModelBreakdownTable({ data, isLoading }: ModelBreakdownTableProps) {
+  const isDark = useDarkMode();
+
   if (isLoading) {
     return (
       <div className="px-5 py-4">
@@ -31,7 +34,7 @@ export function ModelBreakdownTable({ data, isLoading }: ModelBreakdownTableProp
   }
 
   return (
-    <div className="px-5 py-4 bg-slate-50 dark:bg-dark-900/50">
+    <div className="px-5 py-4 bg-slate-100 dark:bg-dark-900/50">
       <table className="w-full text-xs">
         <thead>
           <tr className="text-slate-500 dark:text-slate-500">
@@ -49,7 +52,7 @@ export function ModelBreakdownTable({ data, isLoading }: ModelBreakdownTableProp
             return (
               <tr key={row.model}>
                 <td className="py-2">
-                  <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${modelBadgeClasses(name)}`}>
+                  <span className="px-1.5 py-0.5 text-xs font-medium rounded" style={modelBadgeStyle(name, isDark)}>
                     {name}
                   </span>
                 </td>

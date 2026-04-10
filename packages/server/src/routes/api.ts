@@ -13,6 +13,7 @@ import {
   getProjects,
   getProjectDetail,
   getEntryCount,
+  getLastEntryTimestamp,
 } from '../db/repository.js';
 import { ingestPayload } from '../services/ingest.js';
 
@@ -31,6 +32,7 @@ api.get('/health', (c) => {
     status: 'ok',
     mode: 'local',
     entryCount: getEntryCount(),
+    lastEntry: getLastEntryTimestamp(),
     version: COLLECTOR_VERSION,
   });
 });

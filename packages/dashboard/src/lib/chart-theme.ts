@@ -1,11 +1,30 @@
 /** Chart color constants — neon cyberpunk palette. */
-export const MODEL_COLORS = {
+
+/** Dark mode: bright neon colors on dark backgrounds. */
+export const MODEL_COLORS_DARK = {
   Opus: '#22d3ee',    // cyan-400
   Sonnet: '#a855f7',  // purple-500
   Haiku: '#d946ef',   // fuchsia-500
 } as const;
 
-export const ACCENT_COLOR = '#22d3ee'; // cyan-400
+/** Light mode: deeper shades for readability on white. */
+export const MODEL_COLORS_LIGHT = {
+  Opus: '#0891b2',    // cyan-600
+  Sonnet: '#7c3aed',  // violet-600
+  Haiku: '#c026d3',   // fuchsia-600
+} as const;
+
+/** Get model colors based on dark mode state. */
+export function getModelColors(isDark: boolean) {
+  return isDark ? MODEL_COLORS_DARK : MODEL_COLORS_LIGHT;
+}
+
+export const ACCENT_COLOR_DARK = '#22d3ee';  // cyan-400
+export const ACCENT_COLOR_LIGHT = '#0891b2'; // cyan-600
+
+export function getAccentColor(isDark: boolean) {
+  return isDark ? ACCENT_COLOR_DARK : ACCENT_COLOR_LIGHT;
+}
 
 /** Dark theme colors for chart elements. */
 export const DARK_THEME = {
@@ -22,7 +41,7 @@ export const LIGHT_THEME = {
   grid: '#e2e8f0',
   axis: '#64748b',
   tooltipBg: '#ffffff',
-  tooltipBorder: '#e2e8f0',
+  tooltipBorder: '#cbd5e1',
   tooltipText: '#1e293b',
   cursor: 'rgba(100, 116, 139, 0.1)',
 } as const;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatTokens, formatCost, formatDuration, truncateId, modelShortName, modelBadgeClasses } from '../lib/utils';
+import { formatTokens, formatCost, formatDuration, truncateId, modelShortName, modelBadgeStyle } from '../lib/utils';
 
 describe('formatTokens', () => {
   it('formats billions', () => expect(formatTokens(3_000_000_000)).toBe('3.0B'));
@@ -44,17 +44,29 @@ describe('modelShortName', () => {
   it('returns raw name for unknown', () => expect(modelShortName('gpt-4')).toBe('gpt-4'));
 });
 
-describe('modelBadgeClasses', () => {
-  it('returns cyan classes for Opus', () => {
-    expect(modelBadgeClasses('Opus')).toContain('cyan');
+describe('modelBadgeStyle', () => {
+  it('returns matching color for Opus in dark mode', () => {
+    const style = modelBadgeStyle('Opus', true);
+    expect(style.color).toBe('#22d3ee');
   });
-  it('returns purple classes for Sonnet', () => {
-    expect(modelBadgeClasses('Sonnet')).toContain('purple');
+  it('returns deeper color for Opus in light mode', () => {
+    const style = modelBadgeStyle('Opus', false);
+    expect(style.color).toBe('#0891b2');
   });
-  it('returns fuchsia classes for Haiku', () => {
-    expect(modelBadgeClasses('Haiku')).toContain('fuchsia');
+  it('returns matching color for Sonnet', () => {
+    const style = modelBadgeStyle('Sonnet', true);
+    expect(style.color).toBe('#a855f7');
   });
-  it('returns slate classes for unknown', () => {
-    expect(modelBadgeClasses('Unknown')).toContain('slate');
+  it('returns matching color for Haiku', () => {
+    const style = modelBadgeStyle('Haiku', true);
+    expect(style.color).toBe('#d946ef');
+  });
+  it('returns fallback for unknown', () => {
+    const style = modelBadgeStyle('Unknown', true);
+    expect(style.color).toBe('#94a3b8');
+  });
+  it('includes semi-transparent background', () => {
+    const style = modelBadgeStyle('Opus', true);
+    expect(style.backgroundColor).toContain('#22d3ee');
   });
 });

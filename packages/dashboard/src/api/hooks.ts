@@ -148,6 +148,7 @@ interface HealthResponse {
   status: string;
   mode: string;
   entryCount: number;
+  lastEntry: string | null;
   version: string;
 }
 

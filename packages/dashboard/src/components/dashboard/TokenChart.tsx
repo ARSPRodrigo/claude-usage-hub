@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { MODEL_COLORS, getTheme, modelGradientId } from '@/lib/chart-theme';
+import { getModelColors, getTheme, modelGradientId } from '@/lib/chart-theme';
 import { ChartTooltip } from './ChartTooltip';
 import { useDarkMode } from '@/lib/useDarkMode';
 import { modelShortName, formatTokens } from '@/lib/utils';
@@ -30,7 +30,7 @@ export function TokenChart({ data, isLoading }: TokenChartProps) {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80">
+      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80">
         <div className="h-full flex items-center justify-center">
           <div className="w-full h-48 rounded bg-slate-200 dark:bg-dark-700 animate-pulse" />
         </div>
@@ -66,20 +66,20 @@ export function TokenChart({ data, isLoading }: TokenChartProps) {
 
   if (chartData.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex items-center justify-center">
+      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex items-center justify-center">
         <p className="text-slate-500 dark:text-slate-500 text-sm">No data for this time range</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+    <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
       <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-4">Token Usage</h3>
       <ResponsiveContainer width="100%" height={260}>
         <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
           <defs>
             {models.map((model) => {
-              const color = MODEL_COLORS[model as keyof typeof MODEL_COLORS] ?? '#94a3b8';
+              const color = getModelColors(isDark)[model as keyof ReturnType<typeof getModelColors>] ?? '#94a3b8';
               return (
                 <linearGradient key={model} id={modelGradientId(model)} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={color} stopOpacity={0.4} />
@@ -113,7 +113,7 @@ export function TokenChart({ data, isLoading }: TokenChartProps) {
             wrapperStyle={{ fontSize: '12px', color: theme.axis, paddingTop: '12px' }}
           />
           {models.map((model) => {
-            const color = MODEL_COLORS[model as keyof typeof MODEL_COLORS] ?? '#94a3b8';
+            const color = getModelColors(isDark)[model as keyof ReturnType<typeof getModelColors>] ?? '#94a3b8';
             return (
               <Area
                 key={model}
