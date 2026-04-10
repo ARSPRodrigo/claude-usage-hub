@@ -5,19 +5,27 @@ import { TokenChart } from '@/components/dashboard/TokenChart';
 import { CostChart } from '@/components/dashboard/CostChart';
 import { ModelMixChart } from '@/components/dashboard/ModelMixChart';
 import { ApiError } from '@/components/ApiError';
-import { useDashboardStats, useTokenTimeseries, useCostTrend, useModelMix } from '@/api/hooks';
+import { WelcomeCard } from '@/components/dashboard/WelcomeCard';
+import { useDashboardStats, useTokenTimeseries, useCostTrend, useCostBreakdown, useModelMix, useHealth } from '@/api/hooks';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
 export function DashboardPage() {
   const [range, setRange] = useState<TimeRange>('7d');
 
+  const health = useHealth();
   const stats = useDashboardStats(range);
   const timeseries = useTokenTimeseries(range);
   const costTrend = useCostTrend(range);
+  const costBreakdown = useCostBreakdown(range);
   const modelMix = useModelMix(range);
 
   const hasError = stats.isError || timeseries.isError || costTrend.isError || modelMix.isError;
+  const isEmpty = health.data?.entryCount === 0;
+
+  if (isEmpty) {
+    return <WelcomeCard />;
+  }
 
   if (hasError) {
     return (
@@ -53,6 +61,7 @@ export function DashboardPage() {
         costToday={stats.data?.costToday ?? 0}
         activeSessions={stats.data?.activeSessions ?? 0}
         totalSessions={stats.data?.totalSessions ?? 0}
+        costBreakdown={costBreakdown.data}
         isLoading={stats.isLoading}
       />
 

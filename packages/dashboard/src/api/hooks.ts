@@ -78,11 +78,16 @@ export function useModelMix(range: TimeRange) {
   });
 }
 
+interface SessionsResponse {
+  sessions: SessionRow[];
+  total: number;
+}
+
 export function useSessions(range: TimeRange, limit: number = 50, offset: number = 0) {
   return useQuery({
     queryKey: ['sessions', range, limit, offset],
     queryFn: () =>
-      apiGet<SessionRow[]>('/api/v1/sessions', {
+      apiGet<SessionsResponse>('/api/v1/sessions', {
         range,
         limit: String(limit),
         offset: String(offset),
@@ -90,10 +95,52 @@ export function useSessions(range: TimeRange, limit: number = 50, offset: number
   });
 }
 
+interface SessionDetailRow {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  costUsd: number;
+  entryCount: number;
+}
+
+export function useSessionDetail(sessionId: string | null) {
+  return useQuery({
+    queryKey: ['session-detail', sessionId],
+    queryFn: () => apiGet<SessionDetailRow[]>(`/api/v1/sessions/${sessionId}/detail`),
+    enabled: !!sessionId,
+  });
+}
+
+interface CostBreakdownResponse {
+  inputCost: number;
+  outputCost: number;
+  cacheWriteCost: number;
+  cacheReadCost: number;
+  totalCost: number;
+}
+
+export function useCostBreakdown(range: TimeRange) {
+  return useQuery({
+    queryKey: ['cost-breakdown', range],
+    queryFn: () => apiGet<CostBreakdownResponse>('/api/v1/dashboard/cost-breakdown', { range }),
+    refetchInterval: 60_000,
+  });
+}
+
 export function useProjects(range: TimeRange) {
   return useQuery({
     queryKey: ['projects', range],
     queryFn: () => apiGet<ProjectRow[]>('/api/v1/projects', { range }),
+  });
+}
+
+export function useProjectDetail(projectAlias: string | null, range: TimeRange) {
+  return useQuery({
+    queryKey: ['project-detail', projectAlias, range],
+    queryFn: () => apiGet<SessionDetailRow[]>(`/api/v1/projects/${projectAlias}/detail`, { range }),
+    enabled: !!projectAlias,
   });
 }
 

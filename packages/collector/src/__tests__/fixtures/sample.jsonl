@@ -1,0 +1,7 @@
+{"type":"user","sessionId":"test-session-1","timestamp":"2026-04-01T10:00:00Z","message":{"role":"user","content":"hello"}}
+{"type":"assistant","sessionId":"test-session-1","timestamp":"2026-04-01T10:00:01Z","requestId":"req_001","message":{"id":"msg_001","model":"claude-opus-4-6","role":"assistant","usage":{"input_tokens":3,"output_tokens":0,"cache_creation_input_tokens":500,"cache_read_input_tokens":0,"service_tier":"standard"}}}
+{"type":"assistant","sessionId":"test-session-1","timestamp":"2026-04-01T10:00:02Z","requestId":"req_001","message":{"id":"msg_001","model":"claude-opus-4-6","role":"assistant","usage":{"input_tokens":3,"output_tokens":150,"cache_creation_input_tokens":500,"cache_read_input_tokens":0,"service_tier":"standard"}}}
+{"type":"assistant","sessionId":"test-session-1","timestamp":"2026-04-01T10:00:10Z","requestId":"req_002","message":{"id":"msg_002","model":"claude-sonnet-4-6","role":"assistant","usage":{"input_tokens":10,"output_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":800,"service_tier":"standard"}}}
+{"type":"file-history-snapshot","isSnapshotUpdate":true,"messageId":"msg_002","snapshot":{}}
+invalid json line that should be skipped
+{"type":"assistant","sessionId":"test-session-2","timestamp":"2026-04-01T11:00:00Z","requestId":"req_003","message":{"id":"msg_003","model":"claude-haiku-4-5-20251001","role":"assistant","usage":{"input_tokens":5,"output_tokens":20,"cache_creation_input_tokens":100,"cache_read_input_tokens":200,"service_tier":"standard"}}}

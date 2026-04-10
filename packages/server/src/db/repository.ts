@@ -6,6 +6,8 @@ import type {
   ModelMixEntry,
   SessionRow,
   ProjectRow,
+  SessionDetailRow,
+  CostBreakdown,
   EnrichedEntry,
   TimeRange,
 } from '@claude-usage-hub/shared';
@@ -320,6 +322,207 @@ export function getProjects(range: TimeRange): ProjectRow[] {
     totalTokens: r.total_tokens,
     costUsd: r.cost_usd,
   }));
+}
+
+/**
+ * Get per-model breakdown for a single session.
+ */
+export function getSessionDetail(sessionId: string): SessionDetailRow[] {
+  const raw = getRawDb();
+
+  const rows = raw
+    .prepare(
+      `
+    SELECT
+      model,
+      SUM(input_tokens) as input_tokens,
+      SUM(output_tokens) as output_tokens,
+      SUM(cache_creation_tokens) as cache_creation_tokens,
+      SUM(cache_read_tokens) as cache_read_tokens,
+      SUM(cost_usd) as cost_usd,
+      COUNT(*) as entry_count
+    FROM usage_entries
+    WHERE session_id = ?
+    GROUP BY model
+    ORDER BY cost_usd DESC
+  `,
+    )
+    .all(sessionId) as Array<{
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_tokens: number;
+    cache_read_tokens: number;
+    cost_usd: number;
+    entry_count: number;
+  }>;
+
+  return rows.map((r) => ({
+    model: r.model,
+    inputTokens: r.input_tokens,
+    outputTokens: r.output_tokens,
+    cacheCreationTokens: r.cache_creation_tokens,
+    cacheReadTokens: r.cache_read_tokens,
+    costUsd: r.cost_usd,
+    entryCount: r.entry_count,
+  }));
+}
+
+/**
+ * Get per-model breakdown for a single project.
+ */
+export function getProjectDetail(projectAlias: string, range: TimeRange): SessionDetailRow[] {
+  const raw = getRawDb();
+  const where = whereClause(range);
+  const whereStr = where.sql
+    ? `${where.sql} AND project_alias = ?`
+    : 'WHERE project_alias = ?';
+  const params = [...where.params, projectAlias];
+
+  const rows = raw
+    .prepare(
+      `
+    SELECT
+      model,
+      SUM(input_tokens) as input_tokens,
+      SUM(output_tokens) as output_tokens,
+      SUM(cache_creation_tokens) as cache_creation_tokens,
+      SUM(cache_read_tokens) as cache_read_tokens,
+      SUM(cost_usd) as cost_usd,
+      COUNT(*) as entry_count
+    FROM usage_entries
+    ${whereStr}
+    GROUP BY model
+    ORDER BY cost_usd DESC
+  `,
+    )
+    .all(...params) as Array<{
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_tokens: number;
+    cache_read_tokens: number;
+    cost_usd: number;
+    entry_count: number;
+  }>;
+
+  return rows.map((r) => ({
+    model: r.model,
+    inputTokens: r.input_tokens,
+    outputTokens: r.output_tokens,
+    cacheCreationTokens: r.cache_creation_tokens,
+    cacheReadTokens: r.cache_read_tokens,
+    costUsd: r.cost_usd,
+    entryCount: r.entry_count,
+  }));
+}
+
+/**
+ * Get cost breakdown by token type for a time range.
+ */
+export function getCostBreakdown(range: TimeRange): CostBreakdown {
+  const raw = getRawDb();
+  const where = whereClause(range);
+
+  const row = raw
+    .prepare(
+      `
+    SELECT
+      COALESCE(SUM(input_tokens * 1.0), 0) as total_input,
+      COALESCE(SUM(output_tokens * 1.0), 0) as total_output,
+      COALESCE(SUM(cache_creation_tokens * 1.0), 0) as total_cache_write,
+      COALESCE(SUM(cache_read_tokens * 1.0), 0) as total_cache_read,
+      COALESCE(SUM(cost_usd), 0) as total_cost
+    FROM usage_entries
+    ${where.sql}
+  `,
+    )
+    .get(...where.params) as {
+    total_input: number;
+    total_output: number;
+    total_cache_write: number;
+    total_cache_read: number;
+    total_cost: number;
+  };
+
+  // Approximate cost split using average pricing ratios
+  // The exact split depends on model mix, but this gives a reasonable breakdown
+  const totalTokens = row.total_input + row.total_output + row.total_cache_write + row.total_cache_read;
+  if (totalTokens === 0) {
+    return { inputCost: 0, outputCost: 0, cacheWriteCost: 0, cacheReadCost: 0, totalCost: 0 };
+  }
+
+  // Use actual per-model cost calculation for accurate breakdown
+  const modelRows = raw
+    .prepare(
+      `
+    SELECT
+      model,
+      SUM(input_tokens) as input_tokens,
+      SUM(output_tokens) as output_tokens,
+      SUM(cache_creation_tokens) as cache_creation_tokens,
+      SUM(cache_read_tokens) as cache_read_tokens
+    FROM usage_entries
+    ${where.sql}
+    GROUP BY model
+  `,
+    )
+    .all(...where.params) as Array<{
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_tokens: number;
+    cache_read_tokens: number;
+  }>;
+
+  // Use shared pricing to calculate per-type costs
+  let inputCost = 0;
+  let outputCost = 0;
+  let cacheWriteCost = 0;
+  let cacheReadCost = 0;
+
+  // Dynamic import would be cleaner but we inline the pricing lookup for simplicity
+  // Pricing rates (per million tokens) — matches shared/src/pricing.ts FALLBACK_PRICING
+  const rates: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }> = {
+    'claude-opus-4-6': { input: 5, output: 25, cacheWrite: 10, cacheRead: 0.5 },
+    'claude-opus-4-5': { input: 5, output: 25, cacheWrite: 10, cacheRead: 0.5 },
+    'claude-sonnet-4-6': { input: 3, output: 15, cacheWrite: 6, cacheRead: 0.3 },
+    'claude-sonnet-4-5': { input: 3, output: 15, cacheWrite: 6, cacheRead: 0.3 },
+    'claude-haiku-4-5': { input: 1, output: 5, cacheWrite: 2, cacheRead: 0.1 },
+  };
+  const defaultRate = rates['claude-sonnet-4-6']!;
+
+  for (const m of modelRows) {
+    const r = Object.entries(rates).find(([k]) => m.model.startsWith(k))?.[1] ?? defaultRate;
+    inputCost += (m.input_tokens / 1_000_000) * r.input;
+    outputCost += (m.output_tokens / 1_000_000) * r.output;
+    cacheWriteCost += (m.cache_creation_tokens / 1_000_000) * r.cacheWrite;
+    cacheReadCost += (m.cache_read_tokens / 1_000_000) * r.cacheRead;
+  }
+
+  return {
+    inputCost,
+    outputCost,
+    cacheWriteCost,
+    cacheReadCost,
+    totalCost: inputCost + outputCost + cacheWriteCost + cacheReadCost,
+  };
+}
+
+/**
+ * Get session count for a time range (for pagination).
+ */
+export function getSessionCount(range: TimeRange): number {
+  const raw = getRawDb();
+  const where = whereClause(range);
+
+  const row = raw
+    .prepare(
+      `SELECT COUNT(DISTINCT session_id) as count FROM usage_entries ${where.sql}`,
+    )
+    .get(...where.params) as { count: number };
+
+  return row.count;
 }
 
 /**

@@ -9,9 +9,16 @@ export async function apiGet<T>(
     }
   }
 
-  const response = await fetch(url.toString());
+  let response: Response;
+  try {
+    response = await fetch(url.toString());
+  } catch (err) {
+    throw new Error('Network error: could not reach the server. Is it running?');
+  }
+
   if (!response.ok) {
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`Server error ${response.status}: ${body || response.statusText}`);
   }
 
   return response.json() as Promise<T>;

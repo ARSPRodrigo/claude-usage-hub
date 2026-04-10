@@ -29,15 +29,23 @@ function findDashboardDist(): string | null {
 /**
  * Run the collector and ingest results directly into SQLite.
  */
-async function collectAndIngest(): Promise<number> {
+async function collectAndIngest(verbose: boolean = false): Promise<number> {
   try {
     const result = await runOnce();
+    if (verbose) {
+      console.log(`  Scanned ${result.stats.filesScanned} files, parsed ${result.stats.entriesParsed} entries`);
+    }
     if (result.payload.entries.length > 0) {
       return insertEntries(result.payload.entries);
     }
     return 0;
   } catch (err) {
-    console.error('Collection error:', err instanceof Error ? err.message : err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('not configured')) {
+      console.error('  Collector not configured. This will be auto-fixed.');
+    } else {
+      console.error(`  Collection error: ${msg}`);
+    }
     return 0;
   }
 }
@@ -68,9 +76,9 @@ export async function startCommand(opts: StartOptions): Promise<void> {
 
   // Run initial collection
   console.log('Scanning Claude Code usage data...');
-  const inserted = await collectAndIngest();
+  const inserted = await collectAndIngest(true);
   const total = getEntryCount();
-  console.log(`Ingested ${inserted} new entries (${total} total in database).`);
+  console.log(`  Ingested ${inserted} new entries (${total.toLocaleString()} total in database).`);
 
   // Create Hono app and add dashboard static serving
   const app = createApp();

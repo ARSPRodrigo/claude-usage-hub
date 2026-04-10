@@ -47,7 +47,7 @@ export function CostChart({ data, isLoading }: CostChartProps) {
   if (chartData.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-72 flex items-center justify-center">
-        <p className="text-slate-400 dark:text-slate-500 text-sm">No data for this time range</p>
+        <p className="text-slate-500 dark:text-slate-500 text-sm">No data for this time range</p>
       </div>
     );
   }

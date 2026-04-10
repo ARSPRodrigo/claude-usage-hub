@@ -5,9 +5,13 @@ import {
   getDashboardStats,
   getTokenTimeseries,
   getCostTrend,
+  getCostBreakdown,
   getModelMix,
   getSessions,
+  getSessionDetail,
+  getSessionCount,
   getProjects,
+  getProjectDetail,
   getEntryCount,
 } from '../db/repository.js';
 import { ingestPayload } from '../services/ingest.js';
@@ -65,18 +69,38 @@ api.get('/dashboard/model-mix', (c) => {
   return c.json(getModelMix(range));
 });
 
+// Cost breakdown
+api.get('/dashboard/cost-breakdown', (c) => {
+  const range = parseRange(c);
+  return c.json(getCostBreakdown(range));
+});
+
 // Sessions
 api.get('/sessions', (c) => {
   const range = parseRange(c);
   const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10), 200);
   const offset = parseInt(c.req.query('offset') ?? '0', 10);
-  return c.json(getSessions(range, limit, offset));
+  const total = getSessionCount(range);
+  return c.json({ sessions: getSessions(range, limit, offset), total });
+});
+
+// Session detail
+api.get('/sessions/:id/detail', (c) => {
+  const sessionId = c.req.param('id');
+  return c.json(getSessionDetail(sessionId));
 });
 
 // Projects
 api.get('/projects', (c) => {
   const range = parseRange(c);
   return c.json(getProjects(range));
+});
+
+// Project detail
+api.get('/projects/:alias/detail', (c) => {
+  const alias = c.req.param('alias');
+  const range = parseRange(c);
+  return c.json(getProjectDetail(alias, range));
 });
 
 export { api };

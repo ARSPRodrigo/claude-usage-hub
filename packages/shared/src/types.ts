@@ -168,6 +168,26 @@ export interface ProjectRow {
   costUsd: number;
 }
 
+/** Per-model breakdown within a single session. */
+export interface SessionDetailRow {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  costUsd: number;
+  entryCount: number;
+}
+
+/** Cost breakdown by token type. */
+export interface CostBreakdown {
+  inputCost: number;
+  outputCost: number;
+  cacheWriteCost: number;
+  cacheReadCost: number;
+  totalCost: number;
+}
+
 /** Health check response. */
 export interface HealthResponse {
   status: 'ok';
