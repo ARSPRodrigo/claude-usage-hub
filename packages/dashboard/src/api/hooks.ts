@@ -96,3 +96,18 @@ export function useProjects(range: TimeRange) {
     queryFn: () => apiGet<ProjectRow[]>('/api/v1/projects', { range }),
   });
 }
+
+interface HealthResponse {
+  status: string;
+  mode: string;
+  entryCount: number;
+  version: string;
+}
+
+export function useHealth() {
+  return useQuery({
+    queryKey: ['health'],
+    queryFn: () => apiGet<HealthResponse>('/api/v1/health'),
+    refetchInterval: 60_000,
+  });
+}

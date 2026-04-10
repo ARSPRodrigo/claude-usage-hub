@@ -27,10 +27,11 @@ export async function startServer(
   // Create app
   const app = createApp();
 
-  // Start server
+  // Start server — bind to localhost only in local mode
   const server = serve({
     fetch: app.fetch,
     port: config.port,
+    hostname: config.mode === 'local' ? '127.0.0.1' : '0.0.0.0',
   });
 
   return {

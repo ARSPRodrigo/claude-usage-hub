@@ -3,6 +3,7 @@ import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { useSessions } from '@/api/hooks';
 import { formatDate, formatDuration, formatTokens, formatCost, modelShortName, modelBadgeClasses } from '@/lib/utils';
 import { getDisplayName } from '@/lib/name-generator';
+import { ApiError } from '@/components/ApiError';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
@@ -13,7 +14,21 @@ export function SessionsPage() {
   const [range, setRange] = useState<TimeRange>('7d');
   const [offset, setOffset] = useState(0);
 
-  const { data, isLoading } = useSessions(range, PAGE_SIZE, offset);
+  const { data, isLoading, isError, refetch } = useSessions(range, PAGE_SIZE, offset);
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Sessions</h2>
+          <TimeRangeSelector value={range} onChange={(r) => { setRange(r); setOffset(0); }} />
+        </div>
+        <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+          <ApiError message="Could not load sessions." onRetry={() => refetch()} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

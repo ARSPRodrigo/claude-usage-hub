@@ -4,6 +4,7 @@
   "private": true,
   "description": "Team-wide Claude Code usage monitoring tool",
   "scripts": {
+    "start": "pnpm build && tsx packages/cli/src/cli.ts start",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
@@ -13,6 +14,7 @@
   },
   "devDependencies": {
     "prettier": "^3.3.0",
+    "tsx": "^4.19.0",
     "turbo": "^2.3.0",
     "typescript": "^5.7.0"
   },

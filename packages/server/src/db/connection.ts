@@ -1,3 +1,4 @@
+import { chmodSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
@@ -14,6 +15,9 @@ let rawDb: Database.Database | null = null;
  */
 export function createDb(dbPath: string): { db: DB; raw: Database.Database } {
   const sqlite = new Database(dbPath);
+
+  // Restrict file permissions to owner only (0600)
+  try { chmodSync(dbPath, 0o600); } catch { /* may fail on Windows */ }
 
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('busy_timeout = 5000');

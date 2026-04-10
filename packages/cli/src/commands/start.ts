@@ -111,8 +111,8 @@ export async function startCommand(opts: StartOptions): Promise<void> {
     });
   }
 
-  // Start server
-  const server = serve({ fetch: app.fetch, port });
+  // Start server — bind to localhost only for security
+  const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' });
   console.log('');
   console.log(`  Claude Usage Hub v${COLLECTOR_VERSION}`);
   console.log(`  Dashboard: http://localhost:${port}`);

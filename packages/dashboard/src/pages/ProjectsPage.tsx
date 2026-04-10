@@ -3,15 +3,30 @@ import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { useProjects } from '@/api/hooks';
 import { formatTokens, formatCost } from '@/lib/utils';
 import { getDisplayName } from '@/lib/name-generator';
+import { ApiError } from '@/components/ApiError';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
 export function ProjectsPage() {
   const [range, setRange] = useState<TimeRange>('7d');
 
-  const { data, isLoading } = useProjects(range);
+  const { data, isLoading, isError, refetch } = useProjects(range);
 
   const maxTokens = data?.reduce((max, p) => Math.max(max, p.totalTokens), 0) ?? 1;
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Projects</h2>
+          <TimeRangeSelector value={range} onChange={setRange} />
+        </div>
+        <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+          <ApiError message="Could not load projects." onRetry={() => refetch()} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

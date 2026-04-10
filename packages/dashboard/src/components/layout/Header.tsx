@@ -1,4 +1,4 @@
-import { Moon, Sun, Activity } from 'lucide-react';
+import { Moon, Sun, Gauge } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export function Header() {
@@ -16,7 +16,7 @@ export function Header() {
   return (
     <header className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-900">
       <div className="flex items-center gap-3">
-        <Activity className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+        <Gauge className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
         <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-200">
           Claude Usage Hub
         </h1>

@@ -19,9 +19,7 @@ Currently runs locally on a single machine. Team-wide monitoring across multiple
 
 ## Screenshot
 
-The dashboard in dark mode showing token usage, model mix, and daily cost:
-
-<!-- TODO: Add screenshot -->
+![Dashboard](docs/screenshot-dashboard.png)
 
 ## Quick Start
 
@@ -31,20 +29,19 @@ The dashboard in dark mode showing token usage, model mix, and daily cost:
 git clone https://github.com/ARSPRodrigo/claude-usage-hub.git
 cd claude-usage-hub
 pnpm install
-pnpm build
-
-# Start the dashboard
-cd packages/cli
-npx tsx src/cli.ts start
+pnpm start
 ```
 
 Then open [http://localhost:8080](http://localhost:8080) in your browser.
 
-The collector automatically scans your `~/.claude/projects/` directory, ingests usage data into a local SQLite database, and serves the dashboard.
+The collector automatically scans your `~/.claude/projects/` directory, ingests usage data into a local SQLite database, and serves the dashboard. The server binds to `127.0.0.1` only — it is not accessible from other devices.
 
 ### Options
 
 ```bash
+# Run with custom options
+pnpm build
+cd packages/cli
 npx tsx src/cli.ts start --port 3000        # Custom port (default: 8080)
 npx tsx src/cli.ts start --interval 10      # Re-scan every 10 minutes (default: 5)
 npx tsx src/cli.ts status                   # Show database and collector status
@@ -110,9 +107,17 @@ It **never** reads or stores:
 
 Project directories are hashed into opaque aliases before storage. Session IDs and project aliases are displayed as human-readable generated names (e.g., `golden-harbor-drift`).
 
+## Security
+
+In local mode, the server binds to **`127.0.0.1` only** — it is not accessible from other devices on your network. The SQLite database file is restricted to owner-only permissions (`0600`).
+
+**Important:** Cost estimates and usage patterns (when you work, which models, how much) should be treated as private data even though no conversation content is stored.
+
+See [SECURITY.md](SECURITY.md) for the full security policy, data storage details, and vulnerability reporting.
+
 ## Pricing
 
-Cost estimates are based on official Anthropic API pricing:
+Cost estimates are based on official Anthropic API pricing and may differ from your actual bill:
 
 | Model | Input | Output | Cache Write (1h) | Cache Read |
 |-------|-------|--------|-------------------|------------|
@@ -126,6 +131,7 @@ Source: [platform.claude.com/docs/en/about-claude/pricing](https://platform.clau
 
 - [ ] Team mode: centralized server with collector agents pushing over HTTPS
 - [ ] Role-based access: developers see own data, admins see org-wide
+- [ ] Responsive mobile layout (with team mode)
 - [ ] Docker Compose deployment for team server
 - [ ] Email alerts for usage thresholds
 - [ ] Data retention configuration

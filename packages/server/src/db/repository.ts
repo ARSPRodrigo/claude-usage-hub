@@ -1,4 +1,3 @@
-import { sql } from 'drizzle-orm';
 import { TIME_RANGE_HOURS } from '@claude-usage-hub/shared';
 import type {
   DashboardStats,
@@ -10,8 +9,7 @@ import type {
   EnrichedEntry,
   TimeRange,
 } from '@claude-usage-hub/shared';
-import { getRawDb, getDb } from './connection.js';
-import { usageEntries } from './schema.js';
+import { getRawDb } from './connection.js';
 
 /**
  * Get the ISO timestamp for "now minus N hours".
