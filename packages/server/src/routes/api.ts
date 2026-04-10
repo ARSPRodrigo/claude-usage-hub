@@ -49,6 +49,15 @@ api.get('/health', (c) => {
   });
 });
 
+// Public config for the dashboard (Google client ID, mode)
+api.get('/config', (c) => {
+  return c.json({
+    mode: process.env['MODE'] ?? 'local',
+    googleClientId: process.env['GOOGLE_CLIENT_ID'] ?? '',
+    allowedDomain: process.env['ALLOWED_DOMAIN'] ?? '',
+  });
+});
+
 // Ingest endpoint
 api.post('/ingest', async (c) => {
   const body = await c.req.json();
@@ -67,6 +76,19 @@ api.post('/ingest', async (c) => {
     return c.json({ error: result.error }, 400);
   }
   return c.json({ inserted: result.inserted });
+});
+
+// Collector identity — returns server-assigned developerId for the API key
+api.get('/me', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+  return c.json({
+    developerId: auth.developerId,
+    userId: auth.userId,
+    email: auth.email,
+  });
 });
 
 // Dashboard stats

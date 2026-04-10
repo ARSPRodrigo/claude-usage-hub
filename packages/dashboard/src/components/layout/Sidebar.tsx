@@ -1,18 +1,19 @@
-import { BarChart3, FolderOpen, Clock, Github, Database, RefreshCw } from 'lucide-react';
+import { BarChart3, FolderOpen, Clock, Github, Database, RefreshCw, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
 
-type Page = 'dashboard' | 'sessions' | 'projects';
+type Page = 'dashboard' | 'sessions' | 'projects' | 'profile';
 
 const navItems: { id: Page; label: string; icon: typeof BarChart3 }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
   { id: 'projects', label: 'Projects', icon: FolderOpen },
   { id: 'sessions', label: 'Sessions', icon: Clock },
+  { id: 'profile', label: 'Profile', icon: User },
 ];
 
 interface SidebarProps {
-  activePage: Page;
-  onNavigate: (page: Page) => void;
+  activePage: 'dashboard' | 'sessions' | 'projects' | 'profile';
+  onNavigate: (page: 'dashboard' | 'sessions' | 'projects' | 'profile') => void;
 }
 
 export function Sidebar({ activePage, onNavigate }: SidebarProps) {

@@ -73,15 +73,16 @@ export function getLastUploadTime(): string | null {
   }
 }
 
-/** Generate a default config with random salt and developerId. */
+/** Generate a default config. developerId is server-assigned; pass it explicitly. */
 export function generateDefaultConfig(
   serverUrl: string,
   apiKey: string,
+  developerId?: string,
 ): CollectorConfig {
   return {
     serverUrl,
     apiKey,
-    developerId: randomUUID(),
+    developerId: developerId ?? randomUUID(), // fallback for --skip-check / local mode
     salt: randomBytes(16).toString('hex'),
     intervalMinutes: DEFAULTS.INTERVAL_MINUTES,
     claudeDataPath: DEFAULTS.CLAUDE_DATA_PATH,

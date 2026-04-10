@@ -12,6 +12,7 @@ import {
   revokeApiKey,
 } from '../db/auth-repository.js';
 import { hashPassword, generateApiKey } from '../services/auth-utils.js';
+import { invitationRoutes } from './invitations.js';
 
 const admin = new Hono<AppEnv>();
 
@@ -127,5 +128,8 @@ admin.delete('/api-keys/:id', (c) => {
   }
   return c.json({ ok: true });
 });
+
+// Mount invitation management under /invitations
+admin.route('/invitations', invitationRoutes);
 
 export { admin as adminRoutes };

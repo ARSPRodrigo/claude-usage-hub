@@ -77,6 +77,30 @@ export function runMigrations(raw: Database.Database, mode?: AppMode): void {
       ON api_keys(user_id);
   `);
 
+  // Incremental migrations — wrapped in try/catch since SQLite has no IF NOT EXISTS for columns
+  try {
+    raw.exec(`ALTER TABLE users ADD COLUMN google_id TEXT`);
+    raw.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL`);
+  } catch {
+    // Column already exists from a previous run — safe to ignore
+  }
+
+  // Invitations table (C5)
+  raw.exec(`
+    CREATE TABLE IF NOT EXISTS invitations (
+      id           TEXT PRIMARY KEY,
+      email        TEXT NOT NULL,
+      token_hash   TEXT NOT NULL UNIQUE,
+      invited_by   TEXT NOT NULL REFERENCES users(id),
+      created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
+      expires_at   TEXT NOT NULL,
+      accepted_at  TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email);
+  `);
+
   if (mode === 'team') {
     bootstrapAdmin(raw);
   }

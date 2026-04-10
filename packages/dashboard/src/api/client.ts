@@ -1,4 +1,27 @@
 const TOKEN_KEY = 'chub_token';
+const USER_KEY = 'chub_user';
+
+export interface StoredUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: 'admin' | 'developer';
+  developerId: string;
+}
+
+export function getUser(): StoredUser | null {
+  const raw = localStorage.getItem(USER_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as StoredUser; } catch { return null; }
+}
+
+export function setUser(user: StoredUser): void {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function clearUser(): void {
+  localStorage.removeItem(USER_KEY);
+}
 
 /** Get the stored JWT token. */
 export function getToken(): string | null {
@@ -15,6 +38,12 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+/** Clear all auth state. */
+export function clearAuth(): void {
+  clearToken();
+  clearUser();
+}
+
 /** Build auth headers if a token is available. */
 function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -25,9 +54,9 @@ function authHeaders(): Record<string, string> {
   return headers;
 }
 
-/** Handle 401 responses by clearing token and redirecting to login. */
+/** Handle 401 responses by clearing auth state and redirecting to login. */
 function handleUnauthorized(): never {
-  clearToken();
+  clearAuth();
   window.location.href = '/login';
   throw new Error('Session expired');
 }

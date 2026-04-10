@@ -6,7 +6,7 @@ import { createApp } from './app.js';
 import { createDb } from './db/connection.js';
 import { runMigrations } from './db/migrate.js';
 import { loadServerConfig, loadAuthConfig } from './config.js';
-import { setJwtSecret } from './middleware/auth.js';
+import { setJwtSecret, setGoogleConfig } from './middleware/auth.js';
 
 /**
  * Start the Hono server with SQLite database.
@@ -18,10 +18,11 @@ export async function startServer(
 ): Promise<{ close: () => void; config: ServerConfig }> {
   const config = loadServerConfig(configOverrides);
 
-  // In team mode, load auth config and set JWT secret
+  // In team mode, load auth config and configure auth middleware
   if (config.mode === 'team') {
     const authConfig = loadAuthConfig();
     setJwtSecret(authConfig.jwtSecret);
+    setGoogleConfig(authConfig.googleClientId, authConfig.allowedDomain);
   }
 
   // Ensure DB directory exists

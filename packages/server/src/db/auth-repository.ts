@@ -7,7 +7,8 @@ export interface UserRow {
   display_name: string;
   role: string;
   developer_id: string;
-  password_hash: string;
+  password_hash: string;  // empty string for Google-auth users
+  google_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,19 +35,39 @@ export function findUserById(id: string): UserRow | null {
   return (db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow) ?? null;
 }
 
+export function findUserByGoogleId(googleId: string): UserRow | null {
+  const db = getRawDb();
+  return (db.prepare('SELECT * FROM users WHERE google_id = ?').get(googleId) as UserRow) ?? null;
+}
+
 export function createUser(user: {
   id: string;
   email: string;
   displayName: string;
   role: string;
   developerId: string;
-  passwordHash: string;
+  passwordHash?: string;
+  googleId?: string;
 }): void {
   const db = getRawDb();
   db.prepare(
-    `INSERT INTO users (id, email, display_name, role, developer_id, password_hash)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(user.id, user.email, user.displayName, user.role, user.developerId, user.passwordHash);
+    `INSERT INTO users (id, email, display_name, role, developer_id, password_hash, google_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    user.id,
+    user.email,
+    user.displayName,
+    user.role,
+    user.developerId,
+    user.passwordHash ?? '',
+    user.googleId ?? null,
+  );
+}
+
+export function updateUserGoogleId(userId: string, googleId: string): void {
+  const db = getRawDb();
+  db.prepare("UPDATE users SET google_id = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(googleId, userId);
 }
 
 export function listUsers(): Omit<UserRow, 'password_hash'>[] {
@@ -92,10 +113,28 @@ export function listApiKeys(): Omit<ApiKeyRow, 'key_hash'>[] {
     .all() as Omit<ApiKeyRow, 'key_hash'>[];
 }
 
+export function listApiKeysForUser(userId: string): Omit<ApiKeyRow, 'key_hash'>[] {
+  const db = getRawDb();
+  return db
+    .prepare(
+      `SELECT id, user_id, key_prefix, label, developer_id, created_at, revoked_at
+       FROM api_keys WHERE user_id = ? ORDER BY created_at DESC`,
+    )
+    .all(userId) as Omit<ApiKeyRow, 'key_hash'>[];
+}
+
 export function revokeApiKey(id: string): boolean {
   const db = getRawDb();
   const result = db
     .prepare("UPDATE api_keys SET revoked_at = datetime('now') WHERE id = ? AND revoked_at IS NULL")
     .run(id);
+  return result.changes > 0;
+}
+
+export function revokeApiKeyForUser(id: string, userId: string): boolean {
+  const db = getRawDb();
+  const result = db
+    .prepare("UPDATE api_keys SET revoked_at = datetime('now') WHERE id = ? AND user_id = ? AND revoked_at IS NULL")
+    .run(id, userId);
   return result.changes > 0;
 }

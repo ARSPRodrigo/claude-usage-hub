@@ -20,6 +20,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:bundle": "esbuild src/cli.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/collector.bundle.js",
     "dev": "tsx src/cli.ts",
     "clean": "rm -rf dist",
     "test": "vitest run",
@@ -32,6 +33,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"

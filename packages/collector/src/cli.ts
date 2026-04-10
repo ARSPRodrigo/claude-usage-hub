@@ -94,7 +94,7 @@ program
       config.claudeDataPath = opts.dataPath;
     }
 
-    // Verify connectivity before saving
+    // Verify connectivity and fetch server-assigned developerId
     if (!opts.skipCheck) {
       process.stdout.write(`Checking connection to ${opts.server}... `);
       const { checkConnectivity } = await import('./uploader.js');
@@ -106,6 +106,24 @@ program
         process.exit(1);
       }
       console.log('OK');
+
+      // Fetch server-assigned developerId so all machines for the same user share one identity
+      process.stdout.write('Fetching developer identity... ');
+      try {
+        const res = await fetch(`${opts.server}/api/v1/me`, {
+          headers: { 'X-API-Key': opts.apiKey },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok) {
+          const me = await res.json() as { developerId: string };
+          config.developerId = me.developerId;
+          console.log('OK');
+        } else {
+          console.log(`WARN (${res.status}) — using local identity`);
+        }
+      } catch {
+        console.log('WARN (timeout) — using local identity');
+      }
     }
 
     saveConfig(config);

@@ -29,6 +29,8 @@ export interface AuthConfig {
   jwtSecret: string;
   adminEmail: string;
   adminPassword: string;
+  googleClientId: string;
+  allowedDomain: string;
 }
 
 /**
@@ -44,5 +46,7 @@ export function loadAuthConfig(): AuthConfig {
     jwtSecret,
     adminEmail: process.env['ADMIN_EMAIL'] ?? '',
     adminPassword: process.env['ADMIN_PASSWORD'] ?? '',
+    googleClientId: process.env['GOOGLE_CLIENT_ID'] ?? '',
+    allowedDomain: process.env['ALLOWED_DOMAIN'] ?? '',
   };
 }

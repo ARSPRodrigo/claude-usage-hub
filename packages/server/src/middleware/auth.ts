@@ -9,10 +9,24 @@ import type { AppEnv } from '../env.js';
 type Context = import('hono').Context<AppEnv>;
 
 let jwtSecret: string | null = null;
+let googleClientId: string | null = null;
+let allowedDomain: string | null = null;
 
 /** Set the JWT secret (called once at startup in team mode). */
 export function setJwtSecret(secret: string): void {
   jwtSecret = secret;
+}
+
+/** Set the Google OAuth config (called once at startup in team mode). */
+export function setGoogleConfig(clientId: string, domain: string): void {
+  googleClientId = clientId;
+  allowedDomain = domain;
+}
+
+/** Get the Google OAuth config. Throws if not set. */
+export function getGoogleConfig(): { clientId: string; allowedDomain: string } {
+  if (!googleClientId || !allowedDomain) throw new Error('Google OAuth not configured');
+  return { clientId: googleClientId, allowedDomain };
 }
 
 /** Get the JWT secret. Throws if not set. */
