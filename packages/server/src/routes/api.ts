@@ -1,6 +1,9 @@
 import { Hono } from 'hono';
-import { COLLECTOR_VERSION } from '@claude-usage-hub/shared';
+import { createRequire } from 'node:module';
 import type { TimeRange, AuthContext } from '@claude-usage-hub/shared';
+
+const _require = createRequire(import.meta.url);
+const APP_VERSION: string = (_require('../../package.json') as { version: string }).version;
 import type { AppEnv } from '../env.js';
 
 type Context = import('hono').Context<AppEnv>;
@@ -45,7 +48,7 @@ api.get('/health', (c) => {
     status: 'ok',
     entryCount: getEntryCount(),
     lastEntry: getLastEntryTimestamp(),
-    version: COLLECTOR_VERSION,
+    version: APP_VERSION,
   });
 });
 
