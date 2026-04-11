@@ -74,7 +74,7 @@ api.post('/ingest', async (c) => {
     );
   }
 
-  const result = ingestPayload(body);
+  const result = ingestPayload(body, auth?.apiKeyId);
   if (result.error) {
     return c.json({ error: result.error }, 400);
   }
@@ -128,8 +128,8 @@ api.get('/dashboard/cost-breakdown', (c) => {
 api.get('/sessions', (c) => {
   const range = parseRange(c);
   const scope = getDeveloperScope(c);
-  const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10), 200);
-  const offset = parseInt(c.req.query('offset') ?? '0', 10);
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '50', 10) || 50, 1), 200);
+  const offset = Math.min(Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0), 1_000_000);
   const total = getSessionCount(range, scope);
   return c.json({ sessions: getSessions(range, limit, offset, scope), total });
 });

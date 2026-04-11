@@ -39,8 +39,8 @@ export interface AuthConfig {
  */
 export function loadAuthConfig(): AuthConfig {
   const jwtSecret = process.env['JWT_SECRET'];
-  if (!jwtSecret || jwtSecret === 'change-me-to-a-random-string') {
-    throw new Error('JWT_SECRET must be set to a secure random string in team mode');
+  if (!jwtSecret || jwtSecret === 'change-me-to-a-random-string' || jwtSecret.length < 32) {
+    throw new Error('JWT_SECRET must be set to a secure random string of at least 32 characters in team mode');
   }
   return {
     jwtSecret,

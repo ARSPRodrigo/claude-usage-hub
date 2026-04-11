@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { secureHeaders } from 'hono/secure-headers';
+import { bodyLimit } from 'hono/body-limit';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -33,9 +35,36 @@ import { errorHandler } from './middleware/error.js';
 export function createApp(mode: AppMode = 'local'): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
-  // Middleware
-  app.use('*', cors());
+  // Security headers
+  app.use('*', secureHeaders({
+    xFrameOptions: 'DENY',
+    xContentTypeOptions: 'nosniff',
+    strictTransportSecurity: 'max-age=31536000; includeSubDomains',
+    referrerPolicy: 'strict-origin-when-cross-origin',
+    // COOP must be 'unsafe-none' — 'same-origin' (Hono default) nullifies
+    // window.opener in the Google Sign-In popup, breaking the postMessage
+    // credential return flow.
+    crossOriginOpenerPolicy: 'unsafe-none',
+  }));
+
+  // CORS — allow same-origin in production, localhost in development
+  app.use('*', cors({
+    origin: (origin) => {
+      if (!origin) return origin; // same-origin requests have no Origin header
+      if (process.env['NODE_ENV'] !== 'production' && origin.startsWith('http://localhost')) {
+        return origin;
+      }
+      return null;
+    },
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+  }));
+
   app.use('*', errorHandler);
+
+  // Body size limit on ingest — collector payloads should not exceed 10 MB
+  app.use('/api/v1/ingest', bodyLimit({ maxSize: 10 * 1024 * 1024 }));
 
   if (mode === 'team') {
     // Auth routes (login is public, me/logout require JWT)

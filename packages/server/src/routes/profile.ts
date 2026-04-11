@@ -41,6 +41,9 @@ profile.post('/api-keys', async (c) => {
   if (!body.label?.trim()) {
     return c.json({ error: 'label is required' }, 400);
   }
+  if (body.label.trim().length > 100) {
+    return c.json({ error: 'label must be 100 characters or fewer' }, 400);
+  }
 
   const id = randomUUID();
   const { key, keyHash, keyPrefix } = generateApiKey();
@@ -72,6 +75,9 @@ profile.patch('/', async (c) => {
 
   if (!body.displayName?.trim()) {
     return c.json({ error: 'displayName is required' }, 400);
+  }
+  if (body.displayName.trim().length > 100) {
+    return c.json({ error: 'displayName must be 100 characters or fewer' }, 400);
   }
 
   const updated = updateUserDisplayName(auth.userId, body.displayName.trim());

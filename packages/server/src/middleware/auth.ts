@@ -2,7 +2,7 @@ import type { Next } from 'hono';
 import { sign, verify } from 'hono/utils/jwt/jwt';
 import type { AuthContext, UserRole } from '@claude-usage-hub/shared';
 import { JWT_EXPIRATION_SECONDS, isAdminRole } from '@claude-usage-hub/shared';
-import { findApiKeyByHash, findUserById } from '../db/auth-repository.js';
+import { findApiKeyByHash, findUserById, updateApiKeyLastUsed } from '../db/auth-repository.js';
 import { hashApiKey } from '../services/auth-utils.js';
 import type { AppEnv } from '../env.js';
 
@@ -73,6 +73,9 @@ export async function apiKeyAuth(c: Context, next: Next): Promise<void | Respons
     return c.json({ error: 'Invalid or revoked API key' }, 401);
   }
 
+  // Track last usage (fire-and-forget, best effort)
+  updateApiKeyLastUsed(keyHash);
+
   // Look up the user to get their role and email
   const user = findUserById(apiKey.user_id);
   const auth: AuthContext = {
@@ -80,6 +83,7 @@ export async function apiKeyAuth(c: Context, next: Next): Promise<void | Respons
     email: user?.email ?? '',
     role: (user?.role as UserRole) ?? 'developer',
     developerId: apiKey.developer_id,
+    apiKeyId: apiKey.id,
   };
   c.set('auth', auth);
   await next();

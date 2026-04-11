@@ -10,6 +10,7 @@ interface Invitation {
   createdAt: string;
   expiresAt: string;
   acceptedAt: string | null;
+  role: string;
   status: 'pending' | 'accepted' | 'expired';
 }
 
@@ -70,6 +71,7 @@ export function AdminTeamPage() {
   const qc = useQueryClient();
   const currentUser = getUser();
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'developer' | 'owner'>('developer');
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -84,10 +86,10 @@ export function AdminTeamPage() {
   });
 
   const createInvite = useMutation({
-    mutationFn: (email: string) =>
-      apiPost<{ id: string; inviteUrl: string; email: string; expiresAt: string }>(
+    mutationFn: ({ email, role }: { email: string; role: string }) =>
+      apiPost<{ id: string; inviteUrl: string; email: string; expiresAt: string; role: string }>(
         '/api/v1/admin/invitations',
-        { email },
+        { email, role },
       ),
     onSuccess: (data) => {
       setInviteUrl(data.inviteUrl);
@@ -102,10 +104,10 @@ export function AdminTeamPage() {
   });
 
   const resendInvite = useMutation({
-    mutationFn: (email: string) =>
+    mutationFn: ({ email, role }: { email: string; role: string }) =>
       apiPost<{ id: string; inviteUrl: string; email: string; expiresAt: string }>(
         '/api/v1/admin/invitations',
-        { email },
+        { email, role },
       ),
     onSuccess: (data) => {
       setInviteUrl(data.inviteUrl);
@@ -130,29 +132,37 @@ export function AdminTeamPage() {
   const developers = members.filter((m) => m.role === 'developer');
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Team Management</h1>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Team</h1>
 
       {/* Invite form */}
       <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800 p-5">
         <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-          <Mail className="h-4 w-4" /> Invite a team member
+          <Mail className="h-4 w-4" /> Invite a member
         </h2>
         <div className="flex gap-2">
           <input
             type="email"
             value={inviteEmail}
             onChange={(e) => { setInviteEmail(e.target.value); setInviteUrl(null); }}
-            placeholder="name@codegen.net"
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onKeyDown={(e) => { if (e.key === 'Enter' && inviteEmail.trim()) createInvite.mutate(inviteEmail.trim()); }}
+            placeholder="name@example.com"
+            className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            onKeyDown={(e) => { if (e.key === 'Enter' && inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole }); }}
           />
-          <button
-            onClick={() => { if (inviteEmail.trim()) createInvite.mutate(inviteEmail.trim()); }}
-            disabled={!inviteEmail.trim() || createInvite.isPending}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors"
+          <select
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value as 'developer' | 'owner')}
+            className="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500"
           >
-            Generate invite link
+            <option value="developer">Member</option>
+            <option value="owner">Owner</option>
+          </select>
+          <button
+            onClick={() => { if (inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole }); }}
+            disabled={!inviteEmail.trim() || createInvite.isPending}
+            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors"
+          >
+            Generate link
           </button>
         </div>
 
@@ -192,7 +202,12 @@ export function AdminTeamPage() {
                 <div className="flex items-center gap-3">
                   <StatusBadge status={inv.status} />
                   <div>
-                    <p className="text-sm text-slate-800 dark:text-slate-200">{inv.email}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-slate-800 dark:text-slate-200">{inv.email}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[inv.role] ?? ROLE_BADGE['developer']}`}>
+                        {ROLE_LABEL[inv.role] ?? inv.role}
+                      </span>
+                    </div>
                     <p className="text-xs text-slate-400">
                       {inv.status === 'accepted'
                         ? `Accepted ${new Date(inv.acceptedAt!).toLocaleDateString()}`
@@ -203,7 +218,7 @@ export function AdminTeamPage() {
                 <div className="flex items-center gap-2">
                   {inv.status === 'expired' && (
                     <button
-                      onClick={() => resendInvite.mutate(inv.email)}
+                      onClick={() => resendInvite.mutate({ email: inv.email, role: inv.role })}
                       disabled={resendInvite.isPending}
                       className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
                     >
@@ -273,7 +288,7 @@ export function AdminTeamPage() {
           </h2>
         </div>
         {developers.length === 0 ? (
-          <p className="p-4 text-sm text-slate-400">No developers yet. Invite someone above.</p>
+          <p className="p-4 text-sm text-slate-400">No members yet. Invite someone above.</p>
         ) : (
           <ul className="divide-y divide-slate-100 dark:divide-dark-800">
             {developers.map((m) => (

@@ -1,4 +1,4 @@
-import { BarChart3, FolderOpen, Clock, Github, Database, RefreshCw, Building2, Users, ChevronUp, User, Shield, LogOut, Sun, Moon, Gauge } from 'lucide-react';
+import { BarChart3, FolderOpen, Clock, Github, Database, RefreshCw, Building2, Users, ChevronUp, User, Settings, LogOut, Sun, Moon, Gauge } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
@@ -113,7 +113,7 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
               Organization
             </p>
             <ul className="space-y-0.5 px-3 pb-2">
-              <NavItem id="admin-org" label="Org Overview" icon={Building2} extraActive="developer-detail" />
+              <NavItem id="admin-org" label="Overview" icon={Building2} extraActive="developer-detail" />
               <NavItem id="admin-team" label="Team" icon={Users} />
             </ul>
           </div>
@@ -181,7 +181,7 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
                   onClick={() => { setMenuOpen(false); onNavigate('settings'); }}
                   className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-800 transition-colors"
                 >
-                  <Shield className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                  <Settings className="h-4 w-4 text-slate-400 flex-shrink-0" />
                   Settings
                 </button>
               )}

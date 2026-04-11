@@ -45,11 +45,16 @@ function hashToken(token: string): string {
 /** POST /api/v1/admin/invitations — create a new invitation link */
 invitations.post('/', async (c) => {
   const auth = c.get('auth') as AuthContext;
-  const body = await c.req.json() as { email?: string };
+  const body = await c.req.json() as { email?: string; role?: string };
 
   if (!body.email) {
     return c.json({ error: 'email is required' }, 400);
   }
+  if (body.email.length > 254) {
+    return c.json({ error: 'email is too long' }, 400);
+  }
+
+  const role = body.role === 'owner' ? 'owner' : 'developer';
 
   // Check if already a registered user
   const existingUser = findUserByEmail(body.email);
@@ -62,13 +67,13 @@ invitations.post('/', async (c) => {
   const id = randomUUID();
   const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  createInvitation({ id, email: body.email, tokenHash, invitedBy: auth.userId, expiresAt });
+  createInvitation({ id, email: body.email, tokenHash, invitedBy: auth.userId, expiresAt, role });
 
   // Return the invite URL — admin copies this and shares via chat/Slack
   const origin = new URL(c.req.url).origin;
   const inviteUrl = `${origin}/invite/accept?token=${token}`;
 
-  return c.json({ id, email: body.email, inviteUrl, expiresAt }, 201);
+  return c.json({ id, email: body.email, inviteUrl, expiresAt, role }, 201);
 });
 
 /** GET /api/v1/admin/invitations — list all invitations */
@@ -82,6 +87,7 @@ invitations.get('/', (c) => {
       createdAt: r.created_at,
       expiresAt: r.expires_at,
       acceptedAt: r.accepted_at,
+      role: r.role ?? 'developer',
       status: r.accepted_at ? 'accepted' : new Date(r.expires_at) < new Date() ? 'expired' : 'pending',
     })),
   );
@@ -152,7 +158,7 @@ export async function acceptInvite(c: import('hono').Context<AppEnv>): Promise<R
       id,
       email: googleUser.email,
       displayName: googleUser.name,
-      role: 'developer',
+      role: (invitation.role ?? 'developer') as UserRole,
       developerId,
       googleId: googleUser.sub,
     });

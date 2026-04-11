@@ -73,7 +73,7 @@ function bucketExpression(range: TimeRange): string {
  * Batch insert enriched entries. Uses INSERT OR IGNORE for idempotency.
  * Returns the number of rows actually inserted.
  */
-export function insertEntries(entries: EnrichedEntry[]): number {
+export function insertEntries(entries: EnrichedEntry[], apiKeyId?: string): number {
   if (entries.length === 0) return 0;
 
   const raw = getRawDb();
@@ -81,9 +81,9 @@ export function insertEntries(entries: EnrichedEntry[]): number {
     INSERT OR IGNORE INTO usage_entries
       (session_id, message_id, request_id, timestamp, model,
        input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-       service_tier, developer_id, project_alias, cost_usd)
+       service_tier, developer_id, project_alias, cost_usd, api_key_id)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   let inserted = 0;
@@ -103,6 +103,7 @@ export function insertEntries(entries: EnrichedEntry[]): number {
         e.developerId,
         e.projectAlias,
         e.costUsd,
+        apiKeyId ?? null,
       );
       inserted += result.changes;
     }
@@ -572,6 +573,7 @@ export interface DeveloperStatRow {
   developerId: string;
   email: string;
   displayName: string;
+  role: string;
   totalTokens: number;
   costUsd: number;
   entryCount: number;
@@ -579,7 +581,7 @@ export interface DeveloperStatRow {
 }
 
 /**
- * Per-developer usage breakdown — admin only.
+ * Per-member usage breakdown — admin only. Includes all roles.
  */
 export function getDeveloperStats(): DeveloperStatRow[] {
   const raw = getRawDb();
@@ -588,13 +590,13 @@ export function getDeveloperStats(): DeveloperStatRow[] {
       u.developer_id   AS developerId,
       u.email          AS email,
       u.display_name   AS displayName,
+      u.role           AS role,
       COALESCE(SUM(e.input_tokens + e.output_tokens + e.cache_creation_tokens + e.cache_read_tokens), 0) AS totalTokens,
       COALESCE(SUM(e.cost_usd), 0)  AS costUsd,
       COUNT(e.id)                   AS entryCount,
       MAX(e.timestamp)              AS lastSeen
     FROM users u
     LEFT JOIN usage_entries e ON e.developer_id = u.developer_id
-    WHERE u.role = 'developer'
     GROUP BY u.id
     ORDER BY costUsd DESC
   `).all() as DeveloperStatRow[];

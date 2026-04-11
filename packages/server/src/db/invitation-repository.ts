@@ -8,6 +8,7 @@ export interface InvitationRow {
   created_at: string;
   expires_at: string;
   accepted_at: string | null;
+  role: string;
 }
 
 export function createInvitation(inv: {
@@ -16,12 +17,13 @@ export function createInvitation(inv: {
   tokenHash: string;
   invitedBy: string;
   expiresAt: string;
+  role: string;
 }): void {
   const db = getRawDb();
   db.prepare(
-    `INSERT INTO invitations (id, email, token_hash, invited_by, expires_at)
-     VALUES (?, ?, ?, ?, ?)`,
-  ).run(inv.id, inv.email, inv.tokenHash, inv.invitedBy, inv.expiresAt);
+    `INSERT INTO invitations (id, email, token_hash, invited_by, expires_at, role)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(inv.id, inv.email, inv.tokenHash, inv.invitedBy, inv.expiresAt, inv.role);
 }
 
 export function findInvitationByTokenHash(tokenHash: string): InvitationRow | null {

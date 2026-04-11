@@ -85,6 +85,25 @@ export function runMigrations(raw: Database.Database, mode?: AppMode): void {
     // Column already exists from a previous run — safe to ignore
   }
 
+  try {
+    raw.exec(`ALTER TABLE invitations ADD COLUMN role TEXT NOT NULL DEFAULT 'developer'`);
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  try {
+    raw.exec(`ALTER TABLE api_keys ADD COLUMN last_used_at TEXT`);
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  try {
+    raw.exec(`ALTER TABLE usage_entries ADD COLUMN api_key_id TEXT`);
+    raw.exec(`CREATE INDEX IF NOT EXISTS idx_usage_api_key_id ON usage_entries(api_key_id)`);
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
   // Invitations table (C5)
   raw.exec(`
     CREATE TABLE IF NOT EXISTS invitations (
@@ -94,7 +113,8 @@ export function runMigrations(raw: Database.Database, mode?: AppMode): void {
       invited_by   TEXT NOT NULL REFERENCES users(id),
       created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
       expires_at   TEXT NOT NULL,
-      accepted_at  TEXT
+      accepted_at  TEXT,
+      role         TEXT NOT NULL DEFAULT 'developer'
     );
 
     CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token_hash);

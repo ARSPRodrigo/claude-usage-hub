@@ -172,8 +172,56 @@ export function listApiKeysForUserWithLastUsed(userId: string): (Omit<ApiKeyRow,
   }
 }
 
+export function updateApiKeyLastUsed(keyHash: string): void {
+  const db = getRawDb();
+  db.prepare("UPDATE api_keys SET last_used_at = datetime('now') WHERE key_hash = ?").run(keyHash);
+}
+
 export function truncateUsageEntries(): number {
   const db = getRawDb();
   const result = db.prepare('DELETE FROM usage_entries').run();
   return result.changes;
+}
+
+export function deleteUsageEntriesForDeveloper(developerId: string): number {
+  const db = getRawDb();
+  const result = db.prepare('DELETE FROM usage_entries WHERE developer_id = ?').run(developerId);
+  return result.changes;
+}
+
+export function deleteUsageEntriesForApiKey(apiKeyId: string): number {
+  const db = getRawDb();
+  const result = db.prepare('DELETE FROM usage_entries WHERE api_key_id = ?').run(apiKeyId);
+  return result.changes;
+}
+
+export interface MachineUsageStat {
+  apiKeyId: string;
+  label: string;
+  totalTokens: number;
+  costUsd: number;
+  entryCount: number;
+  lastSeen: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export function getMachineStatsForDeveloper(developerId: string): MachineUsageStat[] {
+  const db = getRawDb();
+  return db.prepare(`
+    SELECT
+      k.id          AS apiKeyId,
+      k.label       AS label,
+      k.created_at  AS createdAt,
+      k.revoked_at  AS revokedAt,
+      COALESCE(SUM(e.input_tokens + e.output_tokens + e.cache_creation_tokens + e.cache_read_tokens), 0) AS totalTokens,
+      COALESCE(SUM(e.cost_usd), 0)   AS costUsd,
+      COALESCE(COUNT(e.id), 0)       AS entryCount,
+      MAX(e.timestamp)               AS lastSeen
+    FROM api_keys k
+    LEFT JOIN usage_entries e ON e.api_key_id = k.id
+    WHERE k.developer_id = ? AND k.revoked_at IS NULL
+    GROUP BY k.id
+    ORDER BY k.created_at DESC
+  `).all(developerId) as MachineUsageStat[];
 }

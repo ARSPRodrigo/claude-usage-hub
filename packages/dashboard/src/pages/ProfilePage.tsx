@@ -112,8 +112,14 @@ export function ProfilePage() {
     },
   });
 
+  // Connected: active + has checked in at least once
+  const connectedKeys = keys.filter((k) => !k.revokedAt && k.lastUsedAt);
+  // Not yet connected: active + never checked in
+  const pendingKeys = keys.filter((k) => !k.revokedAt && !k.lastUsedAt);
+  // Revoked: was connected (has lastUsedAt), shown as history
+  const revokedKeys = keys.filter((k) => k.revokedAt && k.lastUsedAt);
+  // Combined for "no active machines" empty state
   const activeKeys = keys.filter((k) => !k.revokedAt);
-  const revokedKeys = keys.filter((k) => k.revokedAt);
 
   const installCmd: Record<Platform, string> = {
     mac: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${newKey?.key ?? 'chub_...'} sh`,
@@ -123,7 +129,7 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Profile</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{user?.email}</p>
@@ -179,15 +185,15 @@ export function ProfilePage() {
         )}
       </div>
 
-      {/* Active machines */}
+      {/* Connected machines */}
       <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
         <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Active machines</h2>
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Connected machines</h2>
         </div>
-        {activeKeys.length === 0 ? (
+        {connectedKeys.length === 0 ? (
           <div className="p-6 text-center">
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">No active machines configured.</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">Generate an API key below to connect your first machine and start collecting usage data.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">No connected machines yet.</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Generate an API key below and run the installer — the machine will appear here once the collector checks in.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -196,12 +202,12 @@ export function ProfilePage() {
                 <tr className="border-b border-slate-100 dark:border-dark-800">
                   <th className="text-left px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Machine</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Added</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Last used</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Last seen</th>
                   <th className="px-4 py-2" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-dark-800">
-                {activeKeys.map((k) => (
+                {connectedKeys.map((k) => (
                   <tr key={k.id}>
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-800 dark:text-slate-200">{k.label}</p>
@@ -227,7 +233,34 @@ export function ProfilePage() {
         )}
       </div>
 
-      {/* Get started widget when no keys */}
+      {/* Not yet connected — pending keys */}
+      {pendingKeys.length > 0 && (
+        <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Not connected</h2>
+          </div>
+          <ul className="divide-y divide-slate-100 dark:divide-dark-800">
+            {pendingKeys.map((k) => (
+              <li key={k.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{k.label}</p>
+                  <p className="text-xs text-slate-400">Key generated {new Date(k.createdAt).toLocaleDateString()} — collector not yet installed</p>
+                </div>
+                {revokeConfirm === k.id ? (
+                  <div className="flex gap-2 items-center">
+                    <button onClick={() => revokeKey.mutate(k.id)} className="text-xs text-red-600 dark:text-red-400 font-medium hover:underline">Confirm delete</button>
+                    <button onClick={() => setRevokeConfirm(null)} className="text-xs text-slate-400 hover:underline">Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setRevokeConfirm(k.id)} className="text-xs text-red-500 dark:text-red-400 hover:underline transition-colors">Delete</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Get started widget when no machines at all */}
       {activeKeys.length === 0 && !newKey && (
         <div className="bg-cyan-50 dark:bg-cyan-900/10 rounded-lg border border-cyan-200 dark:border-cyan-800 p-5">
           <h2 className="text-sm font-semibold text-cyan-800 dark:text-cyan-300 mb-2">Get started with Claude Usage Hub</h2>
@@ -298,6 +331,7 @@ export function ProfilePage() {
         <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
           <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
             <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-500">Revoked machines</h2>
+
           </div>
           <ul className="divide-y divide-slate-100 dark:divide-dark-800">
             {revokedKeys.map((k) => (

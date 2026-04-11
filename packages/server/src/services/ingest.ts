@@ -6,13 +6,13 @@ import { insertEntries } from '../db/repository.js';
  * Ingest an IngestPayload (team mode — from HTTP POST).
  * Validates the payload, then inserts entries.
  */
-export function ingestPayload(payload: unknown): { inserted: number; error?: string } {
+export function ingestPayload(payload: unknown, apiKeyId?: string): { inserted: number; error?: string } {
   const parsed = ingestPayloadSchema.safeParse(payload);
   if (!parsed.success) {
     return { inserted: 0, error: parsed.error.message };
   }
 
-  const inserted = insertEntries(parsed.data.entries);
+  const inserted = insertEntries(parsed.data.entries, apiKeyId);
   return { inserted };
 }
 

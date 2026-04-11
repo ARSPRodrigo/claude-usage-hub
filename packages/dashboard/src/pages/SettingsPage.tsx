@@ -35,26 +35,10 @@ async function apiDelete<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-type Platform = 'mac' | 'linux' | 'linux-vm' | 'windows';
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}
-      className="px-2 py-1 text-xs rounded bg-slate-200 dark:bg-dark-700 hover:bg-slate-300 dark:hover:bg-dark-600 text-slate-700 dark:text-slate-300 transition-colors"
-    >
-      {copied ? 'Copied!' : 'Copy'}
-    </button>
-  );
-}
-
 export function SettingsPage() {
   const user = getUser();
   const qc = useQueryClient();
-  const isPrimaryOwner = user?.role === 'primary_owner';
-  const serverUrl = window.location.origin;
-  const [platform, setPlatform] = useState<Platform>('mac');
+  const isOwner = user?.role === 'primary_owner' || user?.role === 'owner';
   const [retentionInput, setRetentionInput] = useState<string>('');
   const [wipeConfirm, setWipeConfirm] = useState(false);
 
@@ -76,17 +60,11 @@ export function SettingsPage() {
     },
   });
 
-  const installCmd: Record<Platform, string> = {
-    mac: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=chub_... sh`,
-    linux: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=chub_... sh`,
-    'linux-vm': `# SSH into your VM, then:\ncurl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=chub_... sh`,
-    windows: `$env:CHUB_API_KEY="chub_..."; irm ${serverUrl}/install.ps1 | iex`,
-  };
 
   const currentRetention = settings.data?.retentionDays ?? 90;
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Settings</h1>
 
       {/* Organization section */}
@@ -165,44 +143,8 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* Collector section */}
-      <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Collector</h2>
-        </div>
-        <div className="p-4 space-y-4">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Install the Claude Usage Hub collector on developer machines to start collecting usage data.
-            Each developer needs a personal API key (generated on their Profile page).
-          </p>
-          <div>
-            <div className="flex gap-1 mb-2">
-              {(['mac', 'linux', 'linux-vm', 'windows'] as Platform[]).map((p) => (
-                <button key={p} onClick={() => setPlatform(p)}
-                  className={`px-2 py-1 text-xs rounded ${platform === p ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-dark-800 text-slate-600 dark:text-slate-400'}`}>
-                  {p === 'linux-vm' ? 'Linux VM' : p.charAt(0).toUpperCase() + p.slice(1)}
-                </button>
-              ))}
-            </div>
-            <div className="relative rounded-lg bg-slate-900 p-3">
-              <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap break-all pr-14">{installCmd[platform]}</pre>
-              <div className="absolute top-2 right-2"><CopyButton text={installCmd[platform]} /></div>
-            </div>
-            <p className="mt-2 text-xs text-slate-400">
-              Replace <code className="font-mono">chub_...</code> with the developer&apos;s personal API key from their Profile page.
-            </p>
-          </div>
-          <a
-            href="/download/collector.js"
-            className="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            Download collector.js
-          </a>
-        </div>
-      </div>
-
-      {/* Danger zone — primary_owner only */}
-      {isPrimaryOwner && (
+      {/* Danger zone — owners only */}
+      {isOwner && (
         <div className="bg-white dark:bg-dark-900 rounded-lg border border-red-200 dark:border-red-900/50">
           <div className="px-4 py-3 border-b border-red-200 dark:border-red-900/50">
             <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Danger zone</h2>

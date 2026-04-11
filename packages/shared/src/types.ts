@@ -282,4 +282,5 @@ export interface AuthContext {
   email: string;
   role: UserRole;
   developerId: string;
+  apiKeyId?: string;
 }

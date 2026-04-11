@@ -13,11 +13,14 @@ import {
   revokeApiKey,
   updateUserRole,
   truncateUsageEntries,
+  deleteUsageEntriesForDeveloper,
+  deleteUsageEntriesForApiKey,
+  getMachineStatsForDeveloper,
 } from '../db/auth-repository.js';
 import { hashPassword, generateApiKey } from '../services/auth-utils.js';
 import { invitationRoutes } from './invitations.js';
 import { getDeveloperStats, getDashboardStats, getTokenTimeseries } from '../db/repository.js';
-import { requirePrimaryOwner } from '../middleware/auth.js';
+import { requireAdmin, requirePrimaryOwner } from '../middleware/auth.js';
 
 const admin = new Hono<AppEnv>();
 
@@ -171,26 +174,9 @@ admin.delete('/api-keys/:id', (c) => {
 // Mount invitation management under /invitations
 admin.route('/invitations', invitationRoutes);
 
-/** GET /api/v1/admin/stats/developers — per-developer usage breakdown */
+/** GET /api/v1/admin/stats/developers — per-member usage breakdown */
 admin.get('/stats/developers', (c) => {
-  const range = (c.req.query('range') as 'all' | '7d' | '30d' | '24h' | '5h') ?? 'all';
-  const validRanges = new Set(['5h', '24h', '7d', '30d', 'all']);
-  const safeRange = validRanges.has(range) ? range : 'all';
-
-  // Enrich developer stats with role info
-  const devStats = getDeveloperStats();
-  const users = listUsers();
-  const userMap = new Map(users.map((u) => [u.developer_id, u]));
-
-  return c.json(
-    devStats.map((d) => {
-      const u = userMap.get(d.developerId);
-      return {
-        ...d,
-        role: u?.role ?? 'developer',
-      };
-    }),
-  );
+  return c.json(getDeveloperStats());
 });
 
 /** GET /api/v1/admin/stats/overview — org-wide totals */
@@ -239,9 +225,32 @@ admin.patch('/settings', async (c) => {
   return c.json({ ok: true });
 });
 
-/** DELETE /api/v1/admin/data — wipe all usage data (primary_owner only) */
-admin.delete('/data', requirePrimaryOwner, (c) => {
+/** DELETE /api/v1/admin/data — wipe all usage data (owner+ only) */
+admin.delete('/data', requireAdmin, (c) => {
   const deletedCount = truncateUsageEntries();
+  return c.json({ ok: true, deletedCount });
+});
+
+/** DELETE /api/v1/admin/developers/:developerId/data — wipe one member's usage data */
+admin.delete('/developers/:developerId/data', requireAdmin, (c) => {
+  const { developerId } = c.req.param();
+  const user = findUserById(developerId);
+  const resolvedDeveloperId = user ? user.developer_id : developerId;
+  const deletedCount = deleteUsageEntriesForDeveloper(resolvedDeveloperId);
+  return c.json({ ok: true, deletedCount });
+});
+
+/** GET /api/v1/admin/developers/:developerId/machines — per-machine stats for a member */
+admin.get('/developers/:developerId/machines', requireAdmin, (c) => {
+  const developerId = c.req.param('developerId') as string;
+  const stats = getMachineStatsForDeveloper(developerId);
+  return c.json(stats);
+});
+
+/** DELETE /api/v1/admin/api-keys/:id/data — wipe one machine's usage data */
+admin.delete('/api-keys/:id/data', requireAdmin, (c) => {
+  const id = c.req.param('id') as string;
+  const deletedCount = deleteUsageEntriesForApiKey(id);
   return c.json({ ok: true, deletedCount });
 });
 
