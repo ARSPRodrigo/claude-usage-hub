@@ -16,13 +16,14 @@ const OUTBOX_DIR = () => {
 /** Retry delays in ms: 1s, 4s, 16s. */
 const RETRY_DELAYS = [1000, 4000, 16000];
 
+/** Maximum entries per batch to stay well under the 10 MB body limit. */
+const BATCH_SIZE = 2000;
+
 /**
- * Upload an ingest payload to the server.
- *
- * Retries up to 3 times with exponential backoff.
- * On persistent failure, saves the payload to the outbox for the next cycle.
+ * Upload a single batch to the server with retry logic.
+ * Returns true on success, false on persistent failure (payload saved to outbox).
  */
-export async function upload(
+async function uploadBatch(
   payload: IngestPayload,
   serverUrl: string,
   apiKey: string,
@@ -54,15 +55,40 @@ export async function upload(
       }
     }
 
-    // Wait before retry
     if (attempt < RETRY_DELAYS.length) {
       await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[attempt]));
     }
   }
 
-  // All retries failed — save to outbox
   saveToOutbox(payload);
   return false;
+}
+
+/**
+ * Upload an ingest payload to the server, splitting into batches if needed.
+ *
+ * Large payloads (e.g. first-run historical data) are split into BATCH_SIZE
+ * chunks to stay under the server's 10 MB body limit.
+ */
+export async function upload(
+  payload: IngestPayload,
+  serverUrl: string,
+  apiKey: string,
+): Promise<boolean> {
+  const { entries, ...rest } = payload;
+
+  if (entries.length <= BATCH_SIZE) {
+    return uploadBatch(payload, serverUrl, apiKey);
+  }
+
+  // Split into batches, preserving all other payload fields
+  let allOk = true;
+  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+    const batch = entries.slice(i, i + BATCH_SIZE);
+    const ok = await uploadBatch({ ...rest, entries: batch }, serverUrl, apiKey);
+    if (!ok) allOk = false;
+  }
+  return allOk;
 }
 
 /** Save a failed payload to the outbox directory. */
