@@ -129,36 +129,36 @@ export function LoginPage() {
       </div>
 
       {/* ── Right login panel ─────────────────────────────────── */}
-      <div className="flex-1 flex flex-col items-center justify-center bg-dark-900 px-6 py-12">
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 dark:bg-dark-900 px-6 py-12">
 
         {/* Mobile logo (hidden on desktop) */}
         <div className="lg:hidden flex items-center gap-2.5 mb-10">
-          <Gauge className="h-5 w-5 text-cyan-400" />
-          <span className="text-sm font-semibold text-slate-200">Claude Usage Hub</span>
+          <Gauge className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">Claude Usage Hub</span>
         </div>
 
         <div className="w-full max-w-sm">
 
           {/* Card */}
-          <div className="bg-dark-800 rounded-lg border border-dark-600 p-8 shadow-card">
+          <div className="bg-white dark:bg-dark-800 rounded-lg border border-slate-200 dark:border-dark-600 p-8 shadow-card">
 
-            <p className="label-mono text-slate-500 mb-3">Sign in</p>
-            <h2 className="text-xl font-bold text-white mb-1">
+            <p className="label-mono text-slate-400 dark:text-slate-500 mb-3">Sign in</p>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
               Welcome back
             </h2>
-            <p className="text-sm text-slate-400 mb-7">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-7">
               Use your organization Google account to continue.
             </p>
 
             {error && (
-              <div className="mb-5 p-3 rounded-lg bg-red-900/20 border border-red-800 text-sm text-red-400">
+              <div className="mb-5 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
                 {error}
               </div>
             )}
 
             <div className="flex justify-center">
               {loading ? (
-                <div className="h-10 flex items-center gap-2 text-sm text-slate-400">
+                <div className="h-10 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                   <svg className="animate-spin h-4 w-4 text-cyan-500" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
@@ -171,7 +171,7 @@ export function LoginPage() {
             </div>
           </div>
 
-          <p className="mt-5 text-center text-xs text-dark-500">
+          <p className="mt-5 text-center text-xs text-slate-400 dark:text-dark-500">
             Access is restricted to approved organization members.
           </p>
         </div>
