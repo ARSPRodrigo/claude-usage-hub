@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Gauge, Zap, Users, BarChart3 } from 'lucide-react';
+import { Gauge, Zap, Users, BarChart3, Github } from 'lucide-react';
 import { setToken, setUser, type StoredUser } from '@/api/client';
 import { fetchServerConfig, useGoogleScript } from '@/lib/useGoogleSignIn';
 
@@ -116,7 +116,15 @@ export function LoginPage() {
           </div>
 
           {/* Bottom */}
-          <p className="text-xs text-dark-600 label-mono">Self-hosted · Open source</p>
+          <a
+            href="https://github.com/ARSPRodrigo/claude-usage-hub"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-xs text-dark-500 hover:text-slate-400 transition-colors label-mono"
+          >
+            <Github className="h-3.5 w-3.5" />
+            Self-hosted · Open source
+          </a>
         </div>
       </div>
 
