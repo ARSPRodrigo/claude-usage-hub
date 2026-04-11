@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/api/client';
+import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { DollarSign, Zap, Users, TrendingUp } from 'lucide-react';
+
+type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
 interface DashboardStats {
   tokensToday: number;
@@ -13,10 +17,15 @@ interface DeveloperStat {
   developerId: string;
   email: string;
   displayName: string;
+  role?: string;
   totalTokens: number;
   costUsd: number;
   entryCount: number;
   lastSeen: string | null;
+}
+
+interface AdminOrgPageProps {
+  onSelectDeveloper: (developerId: string, displayName: string) => void;
 }
 
 function StatCard({ label, value, sub, icon: Icon }: {
@@ -26,7 +35,7 @@ function StatCard({ label, value, sub, icon: Icon }: {
   icon: typeof DollarSign;
 }) {
   return (
-    <div className="bg-white dark:bg-dark-900 rounded-xl border border-slate-200 dark:border-dark-800 p-4">
+    <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800 p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</span>
         <Icon className="h-4 w-4 text-slate-400" />
@@ -43,15 +52,43 @@ function fmt(n: number): string {
   return n.toString();
 }
 
-export function AdminOrgPage() {
+function getActivityStatus(lastSeen: string | null): { dotClass: string; label: string } {
+  if (!lastSeen) return { dotClass: 'bg-red-500', label: 'Inactive' };
+
+  const now = new Date();
+  const seen = new Date(lastSeen);
+  const diffMs = now.getTime() - seen.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  if (diffDays < 1) return { dotClass: 'bg-green-500', label: 'Active today' };
+  if (diffDays < 7) return { dotClass: 'bg-yellow-500', label: 'Active this week' };
+  if (diffDays < 30) return { dotClass: 'bg-slate-400', label: 'This month' };
+  return { dotClass: 'bg-red-500', label: 'Inactive' };
+}
+
+const ROLE_BADGE: Record<string, string> = {
+  primary_owner: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
+  owner: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+  developer: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  primary_owner: 'Primary',
+  owner: 'Owner',
+  developer: 'Dev',
+};
+
+export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
+  const [range, setRange] = useState<TimeRange>('7d');
+
   const { data: overview } = useQuery({
-    queryKey: ['admin-overview'],
-    queryFn: () => apiGet<DashboardStats>('/api/v1/admin/stats/overview'),
+    queryKey: ['admin-overview', range],
+    queryFn: () => apiGet<DashboardStats>('/api/v1/admin/stats/overview', { range }),
   });
 
   const { data: devStats = [] } = useQuery({
-    queryKey: ['admin-dev-stats'],
-    queryFn: () => apiGet<DeveloperStat[]>('/api/v1/admin/stats/developers'),
+    queryKey: ['admin-dev-stats', range],
+    queryFn: () => apiGet<DeveloperStat[]>('/api/v1/admin/stats/developers', { range }),
   });
 
   const totalCost = devStats.reduce((s, d) => s + d.costUsd, 0);
@@ -59,8 +96,11 @@ export function AdminOrgPage() {
   const activeDevs = devStats.filter((d) => d.entryCount > 0).length;
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Org Overview</h1>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Org Overview</h1>
+        <TimeRangeSelector value={range} onChange={setRange} />
+      </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -71,7 +111,7 @@ export function AdminOrgPage() {
       </div>
 
       {/* Per-developer breakdown */}
-      <div className="bg-white dark:bg-dark-900 rounded-xl border border-slate-200 dark:border-dark-800">
+      <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
         <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Per-developer usage</h2>
         </div>
@@ -87,16 +127,30 @@ export function AdminOrgPage() {
                   <th className="text-right px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Tokens</th>
                   <th className="text-right px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Cost</th>
                   <th className="text-right px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">% of total</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Last seen</th>
+                  <th className="text-right px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-dark-800">
                 {devStats.map((d) => {
                   const pct = totalCost > 0 ? (d.costUsd / totalCost) * 100 : 0;
+                  const activity = getActivityStatus(d.lastSeen);
+                  const roleBadge = d.role ? ROLE_BADGE[d.role] : ROLE_BADGE['developer'];
+                  const roleLabel = d.role ? ROLE_LABEL[d.role] : 'Dev';
                   return (
-                    <tr key={d.developerId} className="hover:bg-slate-50 dark:hover:bg-dark-800/50">
+                    <tr
+                      key={d.developerId}
+                      className="hover:bg-slate-50 dark:hover:bg-dark-800/50 cursor-pointer"
+                      onClick={() => onSelectDeveloper(d.developerId, d.displayName)}
+                    >
                       <td className="px-4 py-3">
-                        <p className="font-medium text-slate-800 dark:text-slate-200">{d.displayName}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-slate-800 dark:text-slate-200">{d.displayName}</p>
+                          {d.role && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${roleBadge}`}>
+                              {roleLabel}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-400">{d.email}</p>
                       </td>
                       <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums">
@@ -118,10 +172,11 @@ export function AdminOrgPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right text-xs text-slate-400">
-                        {d.lastSeen
-                          ? new Date(d.lastSeen).toLocaleDateString()
-                          : <span className="text-slate-300 dark:text-dark-600">—</span>}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <div className={`h-2 w-2 rounded-full flex-shrink-0 ${activity.dotClass}`} />
+                          <span className="text-xs text-slate-500">{activity.label}</span>
+                        </div>
                       </td>
                     </tr>
                   );

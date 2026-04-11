@@ -159,3 +159,34 @@ export function useHealth() {
     refetchInterval: 60_000,
   });
 }
+
+export function useDeveloperStats(developerId: string, range: TimeRange) {
+  return useQuery({
+    queryKey: ['developer-stats', developerId, range],
+    queryFn: () => apiGet<DashboardStats>(`/api/v1/admin/developer-stats/${developerId}`, { range }),
+    enabled: !!developerId,
+  });
+}
+
+export function useDeveloperTimeseries(developerId: string, range: TimeRange) {
+  return useQuery({
+    queryKey: ['developer-timeseries', developerId, range],
+    queryFn: () => apiGet<TimeseriesPoint[]>(`/api/v1/admin/developer-timeseries/${developerId}`, { range }),
+    enabled: !!developerId,
+  });
+}
+
+interface AdminSettingsResponse {
+  retentionDays: number;
+  allowedDomain: string;
+  mode: string;
+  orgName?: string;
+  orgId?: string;
+}
+
+export function useAdminSettings() {
+  return useQuery({
+    queryKey: ['admin-settings'],
+    queryFn: () => apiGet<AdminSettingsResponse>('/api/v1/admin/settings'),
+  });
+}

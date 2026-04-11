@@ -28,7 +28,7 @@ export function CostChart({ data, isLoading }: CostChartProps) {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-72">
+      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-72">
         <div className="h-full flex items-center justify-center">
           <div className="w-full h-40 rounded bg-slate-200 dark:bg-dark-700 animate-pulse" />
         </div>
@@ -46,14 +46,14 @@ export function CostChart({ data, isLoading }: CostChartProps) {
 
   if (chartData.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-72 flex items-center justify-center">
+      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-72 flex items-center justify-center">
         <p className="text-slate-500 dark:text-slate-500 text-sm">No data for this time range</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+    <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
       <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-4">Daily Cost</h3>
       <ResponsiveContainer width="100%" height={210}>
         <BarChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>

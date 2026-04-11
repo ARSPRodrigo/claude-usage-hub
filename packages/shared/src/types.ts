@@ -93,8 +93,16 @@ export type CursorState = Record<string, number>;
 /** Alias mapping stored locally: hash → original project dir. */
 export type AliasMap = Record<string, string>;
 
-/** User roles in the system. */
-export type UserRole = 'admin' | 'developer';
+/** User roles in the system (hierarchy: primary_owner > owner > developer). */
+export type UserRole = 'primary_owner' | 'owner' | 'developer';
+
+/** Roles that have admin-level access (can view all data, manage team). */
+export const ADMIN_ROLES: readonly UserRole[] = ['primary_owner', 'owner'] as const;
+
+/** Check if a role has admin-level access. */
+export function isAdminRole(role: string): boolean {
+  return role === 'primary_owner' || role === 'owner';
+}
 
 // ---------------------------------------------------------------------------
 // API response types (used by server + dashboard)

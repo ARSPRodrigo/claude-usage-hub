@@ -21,10 +21,8 @@ export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-full">
-        <div className="flex items-center justify-center h-48">
-          <div className="w-32 h-32 rounded-full bg-slate-200 dark:bg-dark-700 animate-pulse" />
-        </div>
+      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex items-center justify-center">
+        <div className="w-32 h-32 rounded-full bg-slate-200 dark:bg-dark-700 animate-pulse" />
       </div>
     );
   }
@@ -38,7 +36,7 @@ export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
 
   if (chartData.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 flex items-center justify-center h-full">
+      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex items-center justify-center">
         <p className="text-slate-500 dark:text-slate-500 text-sm">No data</p>
       </div>
     );
@@ -47,11 +45,11 @@ export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
   const totalTokens = chartData.reduce((sum, d) => sum + d.tokens, 0);
 
   return (
-    <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
-      <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-4">Model Mix</h3>
+    <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex flex-col">
+      <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Model Mix</h3>
 
-      <div className="relative">
-        <ResponsiveContainer width="100%" height={180}>
+      <div className="relative flex-1">
+        <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={chartData}
@@ -94,7 +92,7 @@ export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
       </div>
 
       {/* Legend */}
-      <div className="mt-3 space-y-2">
+      <div className="mt-2 space-y-2">
         {chartData.map((d) => (
           <div key={d.name} className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">

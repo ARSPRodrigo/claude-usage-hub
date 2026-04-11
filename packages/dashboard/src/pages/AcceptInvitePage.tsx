@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { setToken, setUser } from '@/api/client';
+import { setToken, setUser, type StoredUser } from '@/api/client';
 import { fetchServerConfig, useGoogleScript } from '@/lib/useGoogleSignIn';
 
 export function AcceptInvitePage() {
@@ -32,14 +32,14 @@ export function AcceptInvitePage() {
             });
             const data = await res.json() as {
               token?: string;
-              user?: { id: string; email: string; displayName: string; role: 'admin' | 'developer'; developerId: string };
+              user?: { id: string; email: string; displayName: string; role: string; developerId: string };
               apiKey?: { key: string; label: string; developerId: string };
               error?: string;
             };
             if (!res.ok) throw new Error(data.error ?? 'Failed to accept invitation');
 
             setToken(data.token!);
-            setUser(data.user!);
+            setUser(data.user! as StoredUser);
 
             // Store API key in sessionStorage — shown once on setup page
             if (data.apiKey) {

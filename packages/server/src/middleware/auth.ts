@@ -1,7 +1,7 @@
 import type { Next } from 'hono';
 import { sign, verify } from 'hono/utils/jwt/jwt';
 import type { AuthContext, UserRole } from '@claude-usage-hub/shared';
-import { JWT_EXPIRATION_SECONDS } from '@claude-usage-hub/shared';
+import { JWT_EXPIRATION_SECONDS, isAdminRole } from '@claude-usage-hub/shared';
 import { findApiKeyByHash, findUserById } from '../db/auth-repository.js';
 import { hashApiKey } from '../services/auth-utils.js';
 import type { AppEnv } from '../env.js';
@@ -124,12 +124,23 @@ export async function jwtAuth(c: Context, next: Next): Promise<void | Response> 
 }
 
 /**
- * Admin-only guard. Must be used after jwtAuth.
+ * Admin-only guard (primary_owner or owner). Must be used after jwtAuth.
  */
 export async function requireAdmin(c: Context, next: Next): Promise<void | Response> {
   const auth = c.get('auth') as AuthContext | undefined;
-  if (!auth || auth.role !== 'admin') {
+  if (!auth || !isAdminRole(auth.role)) {
     return c.json({ error: 'Admin access required' }, 403);
+  }
+  await next();
+}
+
+/**
+ * Primary owner guard. Must be used after jwtAuth.
+ */
+export async function requirePrimaryOwner(c: Context, next: Next): Promise<void | Response> {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth || auth.role !== 'primary_owner') {
+    return c.json({ error: 'Primary owner access required' }, 403);
   }
   await next();
 }

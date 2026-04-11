@@ -138,3 +138,42 @@ export function revokeApiKeyForUser(id: string, userId: string): boolean {
     .run(id, userId);
   return result.changes > 0;
 }
+
+export function updateUserRole(id: string, role: string): UserRow | null {
+  const db = getRawDb();
+  db.prepare("UPDATE users SET role = ?, updated_at = datetime('now') WHERE id = ?").run(role, id);
+  return findUserById(id);
+}
+
+export function updateUserDisplayName(id: string, displayName: string): UserRow | null {
+  const db = getRawDb();
+  db.prepare("UPDATE users SET display_name = ?, updated_at = datetime('now') WHERE id = ?").run(displayName, id);
+  return findUserById(id);
+}
+
+export function listApiKeysForUserWithLastUsed(userId: string): (Omit<ApiKeyRow, 'key_hash'> & { last_used_at?: string | null })[] {
+  const db = getRawDb();
+  // Try to select last_used_at if it exists, fall back gracefully
+  try {
+    return db
+      .prepare(
+        `SELECT id, user_id, key_prefix, label, developer_id, created_at, revoked_at, last_used_at
+         FROM api_keys WHERE user_id = ? ORDER BY created_at DESC`,
+      )
+      .all(userId) as (Omit<ApiKeyRow, 'key_hash'> & { last_used_at?: string | null })[];
+  } catch {
+    // Column doesn't exist — fall back to without last_used_at
+    return db
+      .prepare(
+        `SELECT id, user_id, key_prefix, label, developer_id, created_at, revoked_at
+         FROM api_keys WHERE user_id = ? ORDER BY created_at DESC`,
+      )
+      .all(userId) as (Omit<ApiKeyRow, 'key_hash'> & { last_used_at?: string | null })[];
+  }
+}
+
+export function truncateUsageEntries(): number {
+  const db = getRawDb();
+  const result = db.prepare('DELETE FROM usage_entries').run();
+  return result.changes;
+}

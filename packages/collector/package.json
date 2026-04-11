@@ -20,7 +20,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "build:bundle": "esbuild src/cli.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/collector.bundle.js",
+    "build:bundle": "node bundle.cjs",
     "dev": "tsx src/cli.ts",
     "clean": "rm -rf dist",
     "test": "vitest run",

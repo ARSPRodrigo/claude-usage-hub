@@ -26,7 +26,7 @@ export function ProjectsPage() {
           <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Projects</h2>
           <TimeRangeSelector value={range} onChange={setRange} />
         </div>
-        <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+        <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
           <ApiError message="Could not load projects." onRetry={() => refetch()} />
         </div>
       </div>
@@ -68,7 +68,7 @@ export function ProjectsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 overflow-hidden">
+      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 dark:border-dark-600">

@@ -2,7 +2,7 @@ import { Gauge, RefreshCw, Terminal } from 'lucide-react';
 
 export function WelcomeCard() {
   return (
-    <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-10 text-center max-w-lg mx-auto mt-16">
+    <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-10 text-center max-w-lg mx-auto mt-16">
       <div className="inline-flex p-4 rounded-2xl bg-cyan-50 dark:bg-cyan-900/15 mb-5">
         <Gauge className="h-10 w-10 text-cyan-600 dark:text-cyan-400" />
       </div>

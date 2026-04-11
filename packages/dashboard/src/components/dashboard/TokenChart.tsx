@@ -30,7 +30,7 @@ export function TokenChart({ data, isLoading }: TokenChartProps) {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80">
+      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80">
         <div className="h-full flex items-center justify-center">
           <div className="w-full h-48 rounded bg-slate-200 dark:bg-dark-700 animate-pulse" />
         </div>
@@ -66,16 +66,17 @@ export function TokenChart({ data, isLoading }: TokenChartProps) {
 
   if (chartData.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex items-center justify-center">
+      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex items-center justify-center">
         <p className="text-slate-500 dark:text-slate-500 text-sm">No data for this time range</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+    <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex flex-col">
       <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-4">Token Usage</h3>
-      <ResponsiveContainer width="100%" height={260}>
+      <div className="flex-1">
+      <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
           <defs>
             {models.map((model) => {
@@ -128,6 +129,7 @@ export function TokenChart({ data, isLoading }: TokenChartProps) {
           })}
         </AreaChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }

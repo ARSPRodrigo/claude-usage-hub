@@ -29,12 +29,12 @@ function parseRange(c: { req: { query: (key: string) => string | undefined } }):
 
 /**
  * Get the developer scope for queries.
- * Returns developerId for developer role (scoped), undefined for admin/local (all data).
+ * Returns developerId for developer role (scoped), undefined for admin roles/local (all data).
  */
 function getDeveloperScope(c: Context): string | undefined {
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return undefined; // local mode — no scoping
-  return auth.role === 'admin' ? undefined : auth.developerId;
+  return auth.role === 'developer' ? auth.developerId : undefined;
 }
 
 const api = new Hono<AppEnv>();

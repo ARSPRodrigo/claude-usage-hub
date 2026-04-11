@@ -10,7 +10,7 @@
 import { Hono } from 'hono';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import type { AppEnv } from '../env.js';
-import type { AuthContext } from '@claude-usage-hub/shared';
+import type { AuthContext, UserRole } from '@claude-usage-hub/shared';
 import {
   createInvitation,
   findInvitationByTokenHash,
@@ -181,7 +181,7 @@ export async function acceptInvite(c: import('hono').Context<AppEnv>): Promise<R
   const token = await signJwt({
     id: user.id,
     email: user.email,
-    role: user.role as 'admin' | 'developer',
+    role: user.role as UserRole,
     developerId: user.developer_id,
   });
 

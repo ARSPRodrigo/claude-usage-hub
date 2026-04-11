@@ -10,6 +10,13 @@ services:
     env_file:
       - .env
 
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token eyJhIjoiMzhkZjA1ODIzNzc3MjMwODY5NTdiNzZhNmRiZWU2ODQiLCJ0IjoiOTRjNDVhMjUtYzRhZi00Mzg5LTgyNjUtY2EzZmMwOGJhZGM2IiwicyI6Ik1UY3paRFV5WW1RdFpHUmxaQzAwTVdSaExXSmlaVGN0TVdVelpqa3pORE5sTURVMCJ9
+    depends_on:
+      - server
+
 volumes:
   data:
     driver: local

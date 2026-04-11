@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { setToken, setUser } from '@/api/client';
+import { setToken, setUser, type StoredUser } from '@/api/client';
 import { fetchServerConfig, useGoogleScript } from '@/lib/useGoogleSignIn';
 
 export function LoginPage() {
@@ -28,10 +28,10 @@ export function LoginPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ idToken: credential }),
             });
-            const data = await res.json() as { token?: string; user?: { id: string; email: string; displayName: string; role: 'admin' | 'developer'; developerId: string }; error?: string };
+            const data = await res.json() as { token?: string; user?: { id: string; email: string; displayName: string; role: string; developerId: string }; error?: string };
             if (!res.ok) throw new Error(data.error ?? 'Sign-in failed');
             setToken(data.token!);
-            setUser(data.user!);
+            setUser(data.user! as StoredUser);
             window.location.href = '/';
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Sign-in failed');

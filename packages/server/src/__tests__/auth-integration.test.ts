@@ -33,7 +33,7 @@ function setupUsers() {
     id: adminId,
     email: 'admin@test.com',
     displayName: 'Admin',
-    role: 'admin',
+    role: 'primary_owner',
     developerId: 'admin-001',
     passwordHash: hashPassword('adminpass123'),
   });
@@ -87,7 +87,7 @@ describe('auth integration (team mode)', () => {
       expect(res.status).toBe(200);
       const body = await res.json() as any;
       expect(body.token).toBeDefined();
-      expect(body.user.role).toBe('admin');
+      expect(body.user.role).toBe('primary_owner');
     });
 
     it('rejects wrong password', async () => {
@@ -116,7 +116,7 @@ describe('auth integration (team mode)', () => {
       const token = await signJwt({
         id: adminId,
         email: 'admin@test.com',
-        role: 'admin',
+        role: 'primary_owner',
         developerId: 'admin-001',
       });
 
@@ -216,7 +216,7 @@ describe('auth integration (team mode)', () => {
       const token = await signJwt({
         id: adminId,
         email: 'admin@test.com',
-        role: 'admin',
+        role: 'primary_owner',
         developerId: 'admin-001',
       });
 
@@ -265,7 +265,7 @@ describe('auth integration (team mode)', () => {
       const token = await signJwt({
         id: adminId,
         email: 'admin@test.com',
-        role: 'admin',
+        role: 'primary_owner',
         developerId: 'admin-001',
       });
 
@@ -284,7 +284,7 @@ describe('auth integration (team mode)', () => {
       const token = await signJwt({
         id: adminId,
         email: 'admin@test.com',
-        role: 'admin',
+        role: 'primary_owner',
         developerId: 'admin-001',
       });
 
@@ -327,7 +327,7 @@ describe('auth integration (team mode)', () => {
       const token = await signJwt({
         id: adminId,
         email: 'admin@test.com',
-        role: 'admin',
+        role: 'primary_owner',
         developerId: 'admin-001',
       });
 

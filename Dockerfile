@@ -7,7 +7,7 @@ WORKDIR /build
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 # Copy workspace config + package manifests
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/collector/package.json packages/collector/
 
@@ -30,7 +30,7 @@ WORKDIR /build
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/dashboard/package.json packages/dashboard/
 
@@ -50,7 +50,7 @@ WORKDIR /build
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 
@@ -71,7 +71,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 # Install only production deps for server
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 
@@ -87,7 +87,7 @@ COPY --from=server-build /build/packages/server/dist packages/server/dist
 COPY --from=dashboard-build /build/packages/dashboard/dist packages/dashboard/dist
 
 # Collector bundle — served at /download/collector.js
-COPY --from=collector-build /build/packages/collector/dist/collector.bundle.js packages/collector/dist/collector.bundle.js
+COPY --from=collector-build /build/packages/collector/dist/collector.bundle.cjs packages/collector/dist/collector.bundle.cjs
 
 # Data directory for SQLite + logs
 RUN mkdir -p /data && chown node:node /data
@@ -100,6 +100,6 @@ ENV NODE_ENV=production \
     PORT=8080 \
     DB_PATH=/data/usage.db \
     DASHBOARD_DIST_PATH=/app/packages/dashboard/dist \
-    COLLECTOR_BUNDLE_PATH=/app/packages/collector/dist/collector.bundle.js
+    COLLECTOR_BUNDLE_PATH=/app/packages/collector/dist/collector.bundle.cjs
 
 CMD ["node", "packages/server/dist/server.js"]

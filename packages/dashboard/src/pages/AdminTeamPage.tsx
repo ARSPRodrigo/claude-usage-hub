@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPost, apiDelete } from '@/api/client';
+import { apiGet, apiPost, apiDelete, getUser } from '@/api/client';
 import { Mail, Link, Trash2, CheckCircle, Clock, XCircle } from 'lucide-react';
 
 interface Invitation {
@@ -22,6 +22,24 @@ interface Member {
   createdAt: string;
 }
 
+async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const url = new URL(path, window.location.origin);
+  const token = localStorage.getItem('chub_token');
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Server error ${response.status}: ${text || response.statusText}`);
+  }
+  return response.json() as Promise<T>;
+}
+
 function StatusBadge({ status }: { status: Invitation['status'] }) {
   const map = {
     pending: { label: 'Pending', icon: Clock, cls: 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' },
@@ -36,8 +54,21 @@ function StatusBadge({ status }: { status: Invitation['status'] }) {
   );
 }
 
+const ROLE_BADGE: Record<string, string> = {
+  primary_owner: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
+  owner: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+  developer: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  primary_owner: 'Primary Owner',
+  owner: 'Owner',
+  developer: 'Developer',
+};
+
 export function AdminTeamPage() {
   const qc = useQueryClient();
+  const currentUser = getUser();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -70,6 +101,24 @@ export function AdminTeamPage() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-invitations'] }),
   });
 
+  const resendInvite = useMutation({
+    mutationFn: (email: string) =>
+      apiPost<{ id: string; inviteUrl: string; email: string; expiresAt: string }>(
+        '/api/v1/admin/invitations',
+        { email },
+      ),
+    onSuccess: (data) => {
+      setInviteUrl(data.inviteUrl);
+      void qc.invalidateQueries({ queryKey: ['admin-invitations'] });
+    },
+  });
+
+  const changeRole = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      apiPatch<{ ok: boolean }>(`/api/v1/admin/developers/${id}/role`, { role }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-members'] }),
+  });
+
   const copyLink = (url: string) => {
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
@@ -77,12 +126,15 @@ export function AdminTeamPage() {
     });
   };
 
+  const owners = members.filter((m) => m.role === 'primary_owner' || m.role === 'owner');
+  const developers = members.filter((m) => m.role === 'developer');
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-4xl">
       <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Team Management</h1>
 
       {/* Invite form */}
-      <div className="bg-white dark:bg-dark-900 rounded-xl border border-slate-200 dark:border-dark-800 p-5">
+      <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800 p-5">
         <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
           <Mail className="h-4 w-4" /> Invite a team member
         </h2>
@@ -130,7 +182,7 @@ export function AdminTeamPage() {
 
       {/* Invitations list */}
       {invitations.length > 0 && (
-        <div className="bg-white dark:bg-dark-900 rounded-xl border border-slate-200 dark:border-dark-800">
+        <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
           <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Invitations</h2>
           </div>
@@ -148,43 +200,101 @@ export function AdminTeamPage() {
                     </p>
                   </div>
                 </div>
-                {inv.status === 'pending' && (
-                  <button
-                    onClick={() => revokeInvite.mutate(inv.id)}
-                    className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                    title="Revoke invitation"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {inv.status === 'expired' && (
+                    <button
+                      onClick={() => resendInvite.mutate(inv.email)}
+                      disabled={resendInvite.isPending}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                    >
+                      Resend
+                    </button>
+                  )}
+                  {inv.status === 'pending' && (
+                    <button
+                      onClick={() => revokeInvite.mutate(inv.id)}
+                      className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                      title="Revoke invitation"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {/* Active members */}
-      <div className="bg-white dark:bg-dark-900 rounded-xl border border-slate-200 dark:border-dark-800">
+      {/* Owners section */}
+      {owners.length > 0 && (
+        <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              Owners ({owners.length})
+            </h2>
+          </div>
+          <ul className="divide-y divide-slate-100 dark:divide-dark-800">
+            {owners.map((m) => (
+              <li key={m.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{m.displayName}</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[m.role] ?? ROLE_BADGE['developer']}`}>
+                      {ROLE_LABEL[m.role] ?? m.role}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">{m.email}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {m.role !== 'primary_owner' && m.id !== currentUser?.id && (
+                    <select
+                      value={m.role}
+                      onChange={(e) => changeRole.mutate({ id: m.id, role: e.target.value })}
+                      className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-700 dark:text-slate-300"
+                    >
+                      <option value="owner">Owner</option>
+                      <option value="developer">Developer</option>
+                    </select>
+                  )}
+                  <p className="text-xs text-slate-400">Joined {new Date(m.createdAt).toLocaleDateString()}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Members (developers) section */}
+      <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
         <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-            Members ({members.filter((m) => m.role === 'developer').length})
+            Members ({developers.length})
           </h2>
         </div>
-        {members.filter((m) => m.role === 'developer').length === 0 ? (
+        {developers.length === 0 ? (
           <p className="p-4 text-sm text-slate-400">No developers yet. Invite someone above.</p>
         ) : (
           <ul className="divide-y divide-slate-100 dark:divide-dark-800">
-            {members
-              .filter((m) => m.role === 'developer')
-              .map((m) => (
-                <li key={m.id} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{m.displayName}</p>
-                    <p className="text-xs text-slate-400">{m.email}</p>
-                  </div>
+            {developers.map((m) => (
+              <li key={m.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{m.displayName}</p>
+                  <p className="text-xs text-slate-400">{m.email}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <select
+                    value={m.role}
+                    onChange={(e) => changeRole.mutate({ id: m.id, role: e.target.value })}
+                    className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-700 dark:text-slate-300"
+                  >
+                    <option value="owner">Owner</option>
+                    <option value="developer">Developer</option>
+                  </select>
                   <p className="text-xs text-slate-400">Joined {new Date(m.createdAt).toLocaleDateString()}</p>
-                </li>
-              ))}
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </div>

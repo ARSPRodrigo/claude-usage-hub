@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { randomUUID } from 'node:crypto';
 import { loginRequestSchema } from '@claude-usage-hub/shared';
-import type { AuthContext } from '@claude-usage-hub/shared';
+import type { AuthContext, UserRole } from '@claude-usage-hub/shared';
 import type { AppEnv } from '../env.js';
 import {
   findUserByEmail,
@@ -37,7 +37,7 @@ auth.post('/login', async (c) => {
   const token = await signJwt({
     id: user.id,
     email: user.email,
-    role: user.role as 'admin' | 'developer',
+    role: user.role as UserRole,
     developerId: user.developer_id,
   });
 
@@ -107,7 +107,7 @@ auth.post('/google/verify', async (c) => {
   const token = await signJwt({
     id: user.id,
     email: user.email,
-    role: user.role as 'admin' | 'developer',
+    role: user.role as UserRole,
     developerId: user.developer_id,
   });
 

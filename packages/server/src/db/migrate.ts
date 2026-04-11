@@ -129,8 +129,8 @@ function bootstrapAdmin(raw: Database.Database): void {
 
   raw.prepare(
     `INSERT INTO users (id, email, display_name, role, developer_id, password_hash)
-     VALUES (?, ?, ?, 'admin', ?, ?)`,
-  ).run(id, email, 'Admin', developerId, passwordHash);
+     VALUES (?, ?, ?, 'primary_owner', ?, ?)`,
+  ).run(id, email, 'Primary Owner', developerId, passwordHash);
 
-  console.log(`Admin user created: ${email}`);
+  console.log(`Primary owner created: ${email}`);
 }

@@ -31,7 +31,7 @@ export function SessionsPage() {
           <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Sessions</h2>
           <TimeRangeSelector value={range} onChange={(r) => { setRange(r); setOffset(0); }} />
         </div>
-        <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
+        <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5">
           <ApiError message="Could not load sessions." onRetry={() => refetch()} />
         </div>
       </div>
@@ -77,7 +77,7 @@ export function SessionsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 overflow-hidden">
+      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 dark:border-dark-600">

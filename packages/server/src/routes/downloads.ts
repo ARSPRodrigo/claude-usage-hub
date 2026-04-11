@@ -10,7 +10,7 @@ const downloads = new Hono();
 function getCollectorBundlePath(): string {
   return (
     process.env['COLLECTOR_BUNDLE_PATH'] ??
-    resolve(__dirname, '../../../../collector/dist/collector.bundle.js')
+    resolve(__dirname, '../../../../collector/dist/collector.bundle.cjs')
   );
 }
 
@@ -23,11 +23,13 @@ downloads.get('/download/collector.js', (c) => {
   const content = readFileSync(bundlePath, 'utf-8');
   c.header('Content-Type', 'application/javascript; charset=utf-8');
   c.header('Content-Disposition', 'attachment; filename="collector.js"');
+  c.header('Cache-Control', 'no-store');
   return c.body(content);
 });
 
 /** GET /install.sh — Mac/Linux install script */
 downloads.get('/install.sh', (c) => {
+  c.header('Cache-Control', 'no-store');
   const origin = new URL(c.req.url).origin;
   const script = `#!/bin/sh
 set -e
@@ -78,6 +80,7 @@ echo "View logs:     tail -f $LOG_DIR/collector.log"
 
 /** GET /install.ps1 — Windows PowerShell install script */
 downloads.get('/install.ps1', (c) => {
+  c.header('Cache-Control', 'no-store');
   const origin = new URL(c.req.url).origin;
   const script = `$ErrorActionPreference = 'Stop'
 

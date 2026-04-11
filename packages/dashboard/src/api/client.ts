@@ -5,7 +5,7 @@ export interface StoredUser {
   id: string;
   email: string;
   displayName: string;
-  role: 'admin' | 'developer';
+  role: 'primary_owner' | 'owner' | 'developer';
   developerId: string;
 }
 
