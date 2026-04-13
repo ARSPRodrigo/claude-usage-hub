@@ -139,29 +139,15 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
             </span>
           </div>
         )}
-        <div className="flex items-center justify-between">
-          <a
-            href="https://github.com/ARSPRodrigo/claude-usage-hub"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-          >
-            <Github className="h-3 w-3 flex-shrink-0" />
-            <span>v{health.data?.version ?? '0.1.0'}</span>
-          </a>
-          <button
-            onClick={() => onNavigate('help')}
-            className={`flex items-center gap-1 text-xs transition-colors ${
-              activePage === 'help'
-                ? 'text-cyan-600 dark:text-cyan-400'
-                : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-            }`}
-            title="Help"
-          >
-            <HelpCircle className="h-3.5 w-3.5" />
-            <span>Help</span>
-          </button>
-        </div>
+        <a
+          href="https://github.com/ARSPRodrigo/claude-usage-hub"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+        >
+          <Github className="h-3 w-3 flex-shrink-0" />
+          <span>v{health.data?.version ?? '0.1.0'}</span>
+        </a>
       </div>
 
       {/* User widget + popover */}
@@ -189,6 +175,13 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
               >
                 <User className="h-4 w-4 text-slate-400 flex-shrink-0" />
                 Profile &amp; Keys
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); onNavigate('help'); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-800 transition-colors"
+              >
+                <HelpCircle className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                Help
               </button>
               {isAdmin && (
                 <button
