@@ -11,9 +11,10 @@ import { AdminOrgPage } from '@/pages/AdminOrgPage';
 import { AdminTeamPage } from '@/pages/AdminTeamPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { DeveloperDetailPage } from '@/pages/DeveloperDetailPage';
+import { HelpPage } from '@/pages/HelpPage';
 import { getToken, getUser } from '@/api/client';
 
-export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'profile' | 'admin-org' | 'admin-team' | 'settings' | 'developer-detail';
+export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'profile' | 'admin-org' | 'admin-team' | 'settings' | 'developer-detail' | 'help';
 
 function usePathname(): string {
   const [pathname, setPathname] = useState(window.location.pathname);
@@ -56,6 +57,7 @@ export default function App() {
     pathname === '/admin/team' ? 'admin-team' :
     pathname === '/admin/settings' ? 'settings' :
     pathname.startsWith('/admin/developer/') ? 'developer-detail' :
+    pathname === '/help' ? 'help' :
     activePage;
 
   const pathMap: Record<InnerPage, string> = {
@@ -67,6 +69,7 @@ export default function App() {
     'admin-team': '/admin/team',
     settings: '/admin/settings',
     'developer-detail': selectedDeveloperId ? `/admin/developer/${selectedDeveloperId}` : '/admin/org',
+    help: '/help',
   };
 
   function navigate(page: InnerPage) {
@@ -100,6 +103,7 @@ export default function App() {
           )}
           {currentPage === 'admin-team' && <AdminTeamPage />}
           {currentPage === 'settings' && <SettingsPage />}
+          {currentPage === 'help' && <HelpPage />}
           {currentPage === 'developer-detail' && selectedDeveloperId && (
             <DeveloperDetailPage
               developerId={selectedDeveloperId}
