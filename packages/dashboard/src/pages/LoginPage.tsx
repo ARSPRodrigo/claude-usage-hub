@@ -102,7 +102,7 @@ export function LoginPage() {
           <div className="flex items-center gap-2.5">
             <Gauge className="h-5 w-5 text-cyan-600 dark:text-cyan-400 flex-shrink-0" />
             <span className="text-sm font-semibold text-slate-600 dark:text-slate-300 tracking-wide">Claude Usage Hub</span>
-            <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-400 font-medium label-mono">alpha</span>
+            <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-400 font-medium label-mono">beta</span>
           </div>
 
           {/* Center hero */}

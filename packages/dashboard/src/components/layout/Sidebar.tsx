@@ -88,7 +88,7 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
           </span>
         </div>
         <span className="mt-1.5 inline-block text-xs px-2 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-400 font-medium">
-          alpha
+          beta
         </span>
       </div>
 
