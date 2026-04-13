@@ -16,27 +16,42 @@ import { getToken, getUser } from '@/api/client';
 
 export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'profile' | 'admin-org' | 'admin-team' | 'settings' | 'developer-detail' | 'help';
 
-function usePathname(): string {
-  const [pathname, setPathname] = useState(window.location.pathname);
-  useEffect(() => {
-    const handler = () => setPathname(window.location.pathname);
-    window.addEventListener('popstate', handler);
-    return () => window.removeEventListener('popstate', handler);
-  }, []);
-  return pathname;
-}
-
 function isAuthenticated(): boolean {
   return !!getToken() && !!getUser();
 }
 
 const PUBLIC_PATHS = ['/login', '/invite/accept', '/setup'];
 
+function pathnameToPage(pathname: string): InnerPage | null {
+  if (pathname === '/profile') return 'profile';
+  if (pathname === '/sessions') return 'sessions';
+  if (pathname === '/projects') return 'projects';
+  if (pathname === '/admin/org') return 'admin-org';
+  if (pathname === '/admin/team') return 'admin-team';
+  if (pathname === '/admin/settings') return 'settings';
+  if (pathname.startsWith('/admin/developer/')) return 'developer-detail';
+  if (pathname === '/help') return 'help';
+  return null;
+}
+
 export default function App() {
-  const pathname = usePathname();
-  const [activePage, setActivePage] = useState<InnerPage>('dashboard');
+  const [pathname, setPathname] = useState(window.location.pathname);
+  const [activePage, setActivePage] = useState<InnerPage>(
+    () => pathnameToPage(window.location.pathname) ?? 'dashboard',
+  );
   const [selectedDeveloperId, setSelectedDeveloperId] = useState<string | null>(null);
   const [selectedDeveloperName, setSelectedDeveloperName] = useState<string>('');
+
+  useEffect(() => {
+    const handler = () => {
+      const p = window.location.pathname;
+      setPathname(p);
+      const page = pathnameToPage(p);
+      if (page) setActivePage(page);
+    };
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
 
   const authed = isAuthenticated();
 
@@ -49,16 +64,7 @@ export default function App() {
     return null;
   }
 
-  const currentPage: InnerPage =
-    pathname === '/profile' ? 'profile' :
-    pathname === '/sessions' ? 'sessions' :
-    pathname === '/projects' ? 'projects' :
-    pathname === '/admin/org' ? 'admin-org' :
-    pathname === '/admin/team' ? 'admin-team' :
-    pathname === '/admin/settings' ? 'settings' :
-    pathname.startsWith('/admin/developer/') ? 'developer-detail' :
-    pathname === '/help' ? 'help' :
-    activePage;
+  const currentPage = activePage;
 
   const pathMap: Record<InnerPage, string> = {
     dashboard: '/',
@@ -74,6 +80,7 @@ export default function App() {
 
   function navigate(page: InnerPage) {
     setActivePage(page);
+    setPathname(pathMap[page]);
     window.history.pushState({}, '', pathMap[page]);
   }
 
@@ -81,7 +88,9 @@ export default function App() {
     setSelectedDeveloperId(developerId);
     setSelectedDeveloperName(displayName);
     setActivePage('developer-detail');
-    window.history.pushState({}, '', `/admin/developer/${developerId}`);
+    const path = `/admin/developer/${developerId}`;
+    setPathname(path);
+    window.history.pushState({}, '', path);
   }
 
   function handleBackFromDeveloper() {
