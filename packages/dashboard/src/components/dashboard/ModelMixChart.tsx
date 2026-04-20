@@ -27,12 +27,19 @@ export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
     );
   }
 
-  const chartData = data.map((d) => ({
-    name: modelShortName(d.model),
-    tokens: d.totalTokens,
-    percentage: d.percentage,
-    color: getModelColors(isDark)[modelShortName(d.model) as keyof ReturnType<typeof getModelColors>] ?? '#94a3b8',
-  }));
+  const aggregated = new Map<string, { tokens: number; percentage: number; color: string }>();
+  for (const d of data) {
+    const name = modelShortName(d.model);
+    const color = getModelColors(isDark)[name as keyof ReturnType<typeof getModelColors>] ?? '#94a3b8';
+    const existing = aggregated.get(name);
+    if (existing) {
+      existing.tokens += d.totalTokens;
+      existing.percentage += d.percentage;
+    } else {
+      aggregated.set(name, { tokens: d.totalTokens, percentage: d.percentage, color });
+    }
+  }
+  const chartData = Array.from(aggregated.entries()).map(([name, v]) => ({ name, ...v }));
 
   if (chartData.length === 0) {
     return (
