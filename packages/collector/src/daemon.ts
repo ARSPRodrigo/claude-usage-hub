@@ -184,14 +184,23 @@ export function uninstallLinux(): InstallResult {
 // ---------------------------------------------------------------------------
 
 export function buildWindowsTaskXml(nodePath: string, cliPath: string): string {
+  const username = process.env['USERNAME'] ?? process.env['USER'] ?? homedir().split('\\').at(-1) ?? '';
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Description>Claude Usage Hub Collector</Description>
   </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>${username}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
+      <UserId>${username}</UserId>
     </LogonTrigger>
   </Triggers>
   <Settings>
