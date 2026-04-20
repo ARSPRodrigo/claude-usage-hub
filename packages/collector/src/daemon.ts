@@ -184,7 +184,7 @@ export function uninstallLinux(): InstallResult {
 // ---------------------------------------------------------------------------
 
 export function buildWindowsTaskXml(nodePath: string, cliPath: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Description>Claude Usage Hub Collector</Description>
@@ -220,7 +220,8 @@ export function installWindows(nodePath: string, cliPath: string, logDir: string
 
   // Write temp XML file then import via schtasks
   const xmlPath = `${logDir}\\task.xml`;
-  writeFileSync(xmlPath, buildWindowsTaskXml(nodePath, cliPath), 'utf-8');
+  // UTF-16 LE with BOM — required by schtasks XML parser to detect encoding before parsing
+  writeFileSync(xmlPath, '\uFEFF' + buildWindowsTaskXml(nodePath, cliPath), 'utf16le');
 
   try {
     execSync(`schtasks /create /xml "${xmlPath}" /tn "${DAEMON_LABEL}" /f`, { stdio: 'pipe' });
