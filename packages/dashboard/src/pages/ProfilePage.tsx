@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, apiDelete, getUser, setUser } from '@/api/client';
-import { Pencil } from 'lucide-react';
+import { Pencil, Plus, Copy } from 'lucide-react';
+import { formatRelative } from '@/lib/utils';
 
 interface ApiKeyRow {
   id: string;
@@ -45,27 +46,23 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
-      onClick={() => { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}
-      className="px-2 py-1 text-xs rounded bg-slate-200 dark:bg-dark-700 hover:bg-slate-300 dark:hover:bg-dark-600 text-slate-700 dark:text-slate-300 transition-colors"
+      onClick={() => { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1400); }); }}
+      className="bg-transparent border-none cursor-pointer text-ink-3 p-0.5 grid place-items-center hover:text-ink-2 transition-colors"
     >
-      {copied ? 'Copied!' : 'Copy'}
+      {copied ? (
+        <span className="mono text-pos text-[10px]" style={{ letterSpacing: '0.05em' }}>COPIED</span>
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
     </button>
   );
 }
 
-function relativeTime(dateStr: string | null | undefined): string {
-  if (!dateStr) return 'Never';
-  const now = Date.now();
-  const diff = now - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
-}
+const ROLE_LABELS: Record<string, string> = {
+  primary_owner: 'Primary Owner',
+  owner: 'Owner',
+  developer: 'Developer',
+};
 
 export function ProfilePage() {
   const user = getUser();
@@ -105,20 +102,15 @@ export function ProfilePage() {
         { displayName },
       ),
     onSuccess: (data) => {
-      if (user) {
-        setUser({ ...user, displayName: data.displayName });
-      }
+      if (user) setUser({ ...user, displayName: data.displayName });
       setEditingName(false);
     },
   });
 
-  // Connected: active + has checked in at least once
-  const connectedKeys = keys.filter((k) => !k.revokedAt && k.lastUsedAt);
-  // Not yet connected: active + never checked in
-  const pendingKeys = keys.filter((k) => !k.revokedAt && !k.lastUsedAt);
-  // Revoked: was connected (has lastUsedAt), shown as history
-  const revokedKeys = keys.filter((k) => k.revokedAt && k.lastUsedAt);
-  // Combined for "no active machines" empty state
+  const initials = user?.displayName
+    ? user.displayName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : user?.email?.slice(0, 2).toUpperCase() ?? '?';
+
   const activeKeys = keys.filter((k) => !k.revokedAt);
 
   const installCmd: Record<Platform, string> = {
@@ -129,222 +121,219 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Profile</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{user?.email}</p>
-      </div>
-
-      {/* Display name */}
-      <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800 p-4">
-        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Display name</h2>
-        {editingName ? (
-          <div className="flex gap-2 items-center">
-            <input
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && nameInput.trim()) updateDisplayName.mutate(nameInput.trim());
-                if (e.key === 'Escape') setEditingName(false);
-              }}
-              autoFocus
-            />
-            <button
-              onClick={() => { if (nameInput.trim()) updateDisplayName.mutate(nameInput.trim()); }}
-              disabled={!nameInput.trim() || updateDisplayName.isPending}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => { setEditingName(false); setNameInput(user?.displayName ?? ''); }}
-              className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-800 dark:text-slate-200">
-              {user?.displayName || <span className="text-slate-400 italic">Not set</span>}
-            </span>
-            <button
-              onClick={() => { setEditingName(true); setNameInput(user?.displayName ?? ''); }}
-              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-              title="Edit display name"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-        {updateDisplayName.isError && (
-          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-            {updateDisplayName.error instanceof Error ? updateDisplayName.error.message : 'Failed to update name'}
-          </p>
-        )}
-      </div>
-
-      {/* Connected machines */}
-      <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Connected machines</h2>
+    <div>
+      {/* Page header */}
+      <div className="mb-6">
+        <div className="label mb-2">ACCOUNT · /PROFILE</div>
+        <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Profile & keys</h1>
+        <div className="text-ink-3 mt-2 text-sm">
+          Your identity and the API keys your machines use to report usage.
         </div>
-        {connectedKeys.length === 0 ? (
-          <div className="p-6 text-center">
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">No connected machines yet.</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">Generate an API key below and run the installer — the machine will appear here once the collector checks in.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-dark-800">
-                  <th className="text-left px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Machine</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Added</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Last seen</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50 dark:divide-dark-800">
-                {connectedKeys.map((k) => (
-                  <tr key={k.id}>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-800 dark:text-slate-200">{k.label}</p>
-                      <p className="text-xs text-slate-400 font-mono">{k.keyPrefix}…</p>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{new Date(k.createdAt).toLocaleDateString()}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{relativeTime(k.lastUsedAt)}</td>
-                    <td className="px-4 py-3 text-right">
-                      {revokeConfirm === k.id ? (
-                        <div className="flex gap-2 justify-end">
-                          <button onClick={() => revokeKey.mutate(k.id)} className="text-xs text-red-600 dark:text-red-400 font-medium hover:underline">Confirm revoke</button>
-                          <button onClick={() => setRevokeConfirm(null)} className="text-xs text-slate-400 hover:underline">Cancel</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setRevokeConfirm(k.id)} className="text-xs text-slate-400 hover:text-red-500 transition-colors">Revoke</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
 
-      {/* Not yet connected — pending keys */}
-      {pendingKeys.length > 0 && (
-        <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Not connected</h2>
+      {/* Two-card top row */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        {/* Identity card */}
+        <div className="rounded-card border border-line bg-surface">
+          <div className="px-5 py-4 border-b border-line-2">
+            <div className="label">A1 · Identity</div>
+            <div className="text-[15.5px] font-medium mt-1.5">Signed in via Google</div>
           </div>
-          <ul className="divide-y divide-slate-100 dark:divide-dark-800">
-            {pendingKeys.map((k) => (
-              <li key={k.id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{k.label}</p>
-                  <p className="text-xs text-slate-400">Key generated {new Date(k.createdAt).toLocaleDateString()} — collector not yet installed</p>
+          <div className="p-5 flex gap-4 items-center">
+            <div
+              className="w-14 h-14 rounded-full text-white grid place-items-center text-xl font-semibold flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, var(--accent) 0%, oklch(0.55 0.15 30) 100%)' }}
+            >
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              {editingName ? (
+                <div className="flex gap-2 items-center">
+                  <input
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    className="flex-1 px-3 py-1.5 text-sm rounded-btn border border-line bg-surface text-ink focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && nameInput.trim()) updateDisplayName.mutate(nameInput.trim());
+                      if (e.key === 'Escape') setEditingName(false);
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => { if (nameInput.trim()) updateDisplayName.mutate(nameInput.trim()); }}
+                    className="px-3 py-1.5 bg-ink text-canvas rounded-btn text-xs font-medium"
+                  >
+                    Save
+                  </button>
                 </div>
-                {revokeConfirm === k.id ? (
-                  <div className="flex gap-2 items-center">
-                    <button onClick={() => revokeKey.mutate(k.id)} className="text-xs text-red-600 dark:text-red-400 font-medium hover:underline">Confirm delete</button>
-                    <button onClick={() => setRevokeConfirm(null)} className="text-xs text-slate-400 hover:underline">Cancel</button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="text-[17px] font-semibold" style={{ letterSpacing: '-0.01em' }}>
+                    {user?.displayName || 'Not set'}
                   </div>
-                ) : (
-                  <button onClick={() => setRevokeConfirm(k.id)} className="text-xs text-red-500 dark:text-red-400 hover:underline transition-colors">Delete</button>
-                )}
-              </li>
-            ))}
-          </ul>
+                  <button
+                    onClick={() => { setEditingName(true); setNameInput(user?.displayName ?? ''); }}
+                    className="p-1 text-ink-3 hover:text-ink transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="mono text-xs text-ink-3 mt-1">{user?.email}</div>
+              <div className="flex gap-1.5 mt-2.5">
+                <span
+                  className="mono text-[10px] px-2 py-0.5 rounded-pill border border-line text-ink-2"
+                  style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}
+                >
+                  {ROLE_LABELS[user?.role ?? ''] ?? user?.role}
+                </span>
+                <span
+                  className="mono text-[10px] px-2 py-0.5 rounded-pill text-pos"
+                  style={{ letterSpacing: '0.06em', textTransform: 'uppercase', background: 'color-mix(in oklch, var(--pos) 14%, transparent)' }}
+                >
+                  Domain verified
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
 
-      {/* Get started widget when no machines at all */}
-      {activeKeys.length === 0 && !newKey && (
-        <div className="bg-cyan-50 dark:bg-cyan-900/10 rounded-lg border border-cyan-200 dark:border-cyan-800 p-5">
-          <h2 className="text-sm font-semibold text-cyan-800 dark:text-cyan-300 mb-2">Get started with Claude Usage Hub</h2>
-          <p className="text-xs text-cyan-700 dark:text-cyan-400 mb-4">
-            Connect a machine to start collecting your Claude Code usage data. Generate an API key, then run the one-line installer on any machine where you use Claude Code.
-          </p>
-          <button
-            onClick={() => { document.getElementById('add-machine-section')?.scrollIntoView({ behavior: 'smooth' }); }}
-            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded-lg font-medium transition-colors"
-          >
-            Add your first machine
+        {/* Personal usage card */}
+        <div className="rounded-card border border-line bg-surface">
+          <div className="px-5 py-4 border-b border-line-2">
+            <div className="label">A2 · Your usage · 30d</div>
+            <div className="text-[15.5px] font-medium mt-1.5">Across all machines</div>
+          </div>
+          <div className="p-5 grid grid-cols-3 gap-3.5">
+            {[
+              { l: 'Tokens', v: '—' },
+              { l: 'Cost', v: '—' },
+              { l: 'Sessions', v: String(activeKeys.length) },
+            ].map((x) => (
+              <div key={x.l}>
+                <div className="label mb-1.5">{x.l}</div>
+                <div className="mono tabular text-[22px] font-medium" style={{ letterSpacing: '-0.015em' }}>
+                  {x.v}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* API keys table */}
+      <div className="rounded-card border border-line bg-surface mb-4">
+        <div className="px-5 py-4 border-b border-line flex items-center justify-between">
+          <div>
+            <div className="label">A3 · API keys</div>
+            <div className="text-[15.5px] font-medium mt-1.5" style={{ letterSpacing: '-0.01em' }}>One per machine</div>
+          </div>
+          {!newKey && (
+            <div className="flex gap-2">
+              <input
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="Machine name"
+                className="px-3 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none w-48"
+              />
+              <button
+                onClick={() => { if (newLabel.trim()) generateKey.mutate(newLabel.trim()); }}
+                disabled={!newLabel.trim() || generateKey.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Generate key
+              </button>
+            </div>
+          )}
+        </div>
+
+        {newKey && (
+          <div className="px-5 py-4 border-b border-line-2" style={{ background: 'color-mix(in oklch, var(--accent) 6%, transparent)' }}>
+            <p className="text-xs font-semibold mb-1" style={{ color: 'var(--accent)' }}>Save this key — shown once</p>
+            <div className="flex items-center gap-2">
+              <code className="mono text-xs flex-1 break-all">{newKey.key}</code>
+              <CopyButton text={newKey.key} />
+            </div>
+            <div className="flex gap-1 mt-3 mb-2">
+              {(['mac', 'linux', 'linux-vm', 'windows'] as Platform[]).map((p) => (
+                <button key={p} onClick={() => setPlatform(p)}
+                  className="mono px-2 py-1 text-[10.5px] rounded-pill border border-line cursor-pointer"
+                  style={{
+                    background: platform === p ? 'var(--ink)' : 'var(--surface)',
+                    color: platform === p ? 'var(--bg)' : 'var(--ink-2)',
+                    letterSpacing: '0.04em',
+                  }}>
+                  {p === 'linux-vm' ? 'LINUX VM' : p.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <div className="relative rounded-btn bg-ink text-canvas p-3.5 mt-1">
+              <pre className="mono text-xs whitespace-pre-wrap break-all pr-14">{installCmd[platform]}</pre>
+            </div>
+            <button onClick={() => setNewKey(null)} className="text-xs text-ink-3 hover:text-ink underline mt-2">Done — dismiss</button>
+          </div>
+        )}
+
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="border-b border-line">
+              {['Label', 'Key', 'Machine', 'Created', 'Last used', ''].map((h) => (
+                <th key={h} className="label text-left py-2.5 px-4">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {activeKeys.map((k, i) => (
+              <tr key={k.id} style={{ borderBottom: i === activeKeys.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+                <td className="px-4 py-3.5 font-medium">{k.label}</td>
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-2">
+                    <code className="mono text-xs bg-canvas-alt px-2 py-0.5 rounded-pill border border-line">
+                      {k.keyPrefix}…
+                    </code>
+                    <CopyButton text={k.keyPrefix} />
+                  </div>
+                </td>
+                <td className="px-4 py-3.5 mono text-ink-2">{k.label}</td>
+                <td className="px-4 py-3.5 text-ink-3 text-xs">{formatRelative(k.createdAt)}</td>
+                <td className="px-4 py-3.5 text-ink-3 text-xs">{formatRelative(k.lastUsedAt ?? '')}</td>
+                <td className="px-4 py-3.5 text-right">
+                  {revokeConfirm === k.id ? (
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => revokeKey.mutate(k.id)} className="text-xs text-neg font-medium">Confirm</button>
+                      <button onClick={() => setRevokeConfirm(null)} className="text-xs text-ink-3">Cancel</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setRevokeConfirm(k.id)}
+                      className="text-[11.5px] border border-line rounded-btn px-2.5 py-1 text-neg cursor-pointer bg-transparent hover:bg-canvas-alt transition-colors"
+                    >
+                      Revoke
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Danger zone */}
+      <div className="rounded-card bg-surface p-5" style={{ border: '1px solid color-mix(in oklch, var(--neg) 20%, var(--line))' }}>
+        <div className="flex items-center justify-between gap-5">
+          <div>
+            <div className="label text-neg">Danger zone</div>
+            <div className="text-[15px] font-medium mt-1.5">Wipe my usage data</div>
+            <div className="text-[13px] text-ink-3 mt-1">
+              Removes all token entries reported by your machines. Cannot be undone.
+            </div>
+          </div>
+          <button className="px-3.5 py-[7px] border border-neg rounded-btn text-neg text-[13px] font-medium cursor-pointer bg-transparent hover:bg-[color-mix(in_oklch,var(--neg)_6%,transparent)] transition-colors whitespace-nowrap">
+            Wipe data
           </button>
         </div>
-      )}
-
-      {/* Generate new key */}
-      <div id="add-machine-section" className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800 p-4">
-        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Add another machine</h2>
-        {!newKey ? (
-          <div className="flex gap-2">
-            <input
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Machine name (e.g. OCI VM, Windows PC)"
-              className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={() => { if (newLabel.trim()) generateKey.mutate(newLabel.trim()); }}
-              disabled={!newLabel.trim() || generateKey.isPending}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors"
-            >
-              Generate key
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Save this key — shown once</p>
-              <div className="flex items-center gap-2">
-                <code className="text-xs font-mono text-amber-900 dark:text-amber-200 flex-1 break-all">{newKey.key}</code>
-                <CopyButton text={newKey.key} />
-              </div>
-            </div>
-
-            {/* Platform install command */}
-            <div>
-              <div className="flex gap-1 mb-2">
-                {(['mac', 'linux', 'linux-vm', 'windows'] as Platform[]).map((p) => (
-                  <button key={p} onClick={() => setPlatform(p)}
-                    className={`px-2 py-1 text-xs rounded ${platform === p ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-dark-800 text-slate-600 dark:text-slate-400'}`}>
-                    {p === 'linux-vm' ? 'Linux VM' : p.charAt(0).toUpperCase() + p.slice(1)}
-                  </button>
-                ))}
-              </div>
-              <div className="relative rounded-lg bg-slate-900 p-3">
-                <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap break-all pr-14">{installCmd[platform]}</pre>
-                <div className="absolute top-2 right-2"><CopyButton text={installCmd[platform]} /></div>
-              </div>
-            </div>
-
-            <button onClick={() => setNewKey(null)} className="text-xs text-slate-400 hover:text-slate-600 underline">Done — dismiss</button>
-          </div>
-        )}
       </div>
-
-      {/* Revoked keys */}
-      {revokedKeys.length > 0 && (
-        <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
-            <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-500">Revoked machines</h2>
-
-          </div>
-          <ul className="divide-y divide-slate-100 dark:divide-dark-800">
-            {revokedKeys.map((k) => (
-              <li key={k.id} className="flex items-center justify-between px-4 py-3 opacity-50">
-                <div>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 line-through">{k.label}</p>
-                  <p className="text-xs text-slate-400">Revoked {new Date(k.revokedAt!).toLocaleDateString()}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }

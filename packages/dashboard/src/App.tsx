@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { SessionsPage } from '@/pages/SessionsPage';
@@ -13,8 +14,21 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { DeveloperDetailPage } from '@/pages/DeveloperDetailPage';
 import { HelpPage } from '@/pages/HelpPage';
 import { getToken, getUser } from '@/api/client';
+import { useQueryClient } from '@tanstack/react-query';
 
 export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'profile' | 'admin-org' | 'admin-team' | 'settings' | 'developer-detail' | 'help';
+
+const PAGE_LABELS: Record<InnerPage, string> = {
+  dashboard: 'DASHBOARD',
+  sessions: 'SESSIONS',
+  projects: 'PROJECTS',
+  profile: 'PROFILE',
+  'admin-org': 'OVERVIEW',
+  'admin-team': 'TEAM',
+  settings: 'SETTINGS',
+  'developer-detail': 'DEVELOPER',
+  help: 'HELP',
+};
 
 function isAuthenticated(): boolean {
   return !!getToken() && !!getUser();
@@ -41,6 +55,7 @@ export default function App() {
   );
   const [selectedDeveloperId, setSelectedDeveloperId] = useState<string | null>(null);
   const [selectedDeveloperName, setSelectedDeveloperName] = useState<string>('');
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const handler = () => {
@@ -99,10 +114,35 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen flex bg-slate-50 dark:bg-dark-950">
+    <div className="flex min-h-screen bg-canvas">
       <Sidebar activePage={currentPage} onNavigate={navigate} />
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-6 max-w-[1280px] mx-auto">
+
+      <main className="flex-1 flex flex-col min-w-0">
+        {/* Top bar */}
+        <div
+          className="flex items-center justify-between gap-4 px-7 border-b border-line sticky top-0 z-50"
+          style={{
+            padding: '14px 28px',
+            background: 'color-mix(in oklch, var(--bg) 92%, transparent)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <div className="mono text-[11px] text-ink-3" style={{ letterSpacing: '0.05em' }}>
+            ACME · DEV&nbsp;&nbsp;/&nbsp;&nbsp;
+            <span className="text-ink">{PAGE_LABELS[currentPage]}</span>
+          </div>
+
+          <button
+            onClick={() => queryClient.invalidateQueries()}
+            title="Refresh"
+            className="p-[7px] border border-line bg-surface rounded-btn cursor-pointer text-ink-2 grid place-items-center hover:bg-canvas-alt transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Page content */}
+        <div className="px-8 pt-7 pb-12 max-w-[1400px] w-full mx-auto">
           {currentPage === 'dashboard' && <DashboardPage />}
           {currentPage === 'sessions' && <SessionsPage />}
           {currentPage === 'projects' && <ProjectsPage />}

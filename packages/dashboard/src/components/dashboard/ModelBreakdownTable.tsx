@@ -1,5 +1,4 @@
 import { formatTokens, formatCost, modelShortName, modelBadgeStyle } from '@/lib/utils';
-import { useDarkMode } from '@/lib/useDarkMode';
 
 interface ModelRow {
   model: string;
@@ -17,27 +16,25 @@ interface ModelBreakdownTableProps {
 }
 
 export function ModelBreakdownTable({ data, isLoading }: ModelBreakdownTableProps) {
-  const isDark = useDarkMode();
-
   if (isLoading) {
     return (
       <div className="px-5 py-4">
-        <div className="h-16 rounded bg-slate-200 dark:bg-dark-700 animate-pulse" />
+        <div className="h-16 rounded bg-line-2 animate-pulse" />
       </div>
     );
   }
 
   if (!data || data.length === 0) {
     return (
-      <div className="px-5 py-4 text-sm text-slate-500">No detail available</div>
+      <div className="px-5 py-4 text-sm text-ink-3">No detail available</div>
     );
   }
 
   return (
-    <div className="px-5 py-4 bg-slate-100 dark:bg-dark-900/50">
+    <div className="px-5 py-4 bg-canvas-alt">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-slate-500 dark:text-slate-500">
+          <tr className="text-ink-3">
             <th className="text-left py-1.5 font-medium">Model</th>
             <th className="text-right py-1.5 font-medium">Input</th>
             <th className="text-right py-1.5 font-medium">Output</th>
@@ -46,31 +43,21 @@ export function ModelBreakdownTable({ data, isLoading }: ModelBreakdownTableProp
             <th className="text-right py-1.5 font-medium">Cost</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-dark-600/30">
-          {data.map((row) => {
+        <tbody>
+          {data.map((row, i) => {
             const name = modelShortName(row.model);
             return (
-              <tr key={row.model}>
+              <tr key={row.model} style={{ borderTop: i === 0 ? 'none' : '1px solid var(--line-2)' }}>
                 <td className="py-2">
-                  <span className="px-1.5 py-0.5 text-xs font-medium rounded" style={modelBadgeStyle(name, isDark)}>
+                  <span className="px-1.5 py-0.5 text-xs font-medium rounded-pill" style={modelBadgeStyle(name)}>
                     {name}
                   </span>
                 </td>
-                <td className="py-2 text-right text-slate-700 dark:text-slate-300">
-                  {formatTokens(row.inputTokens)}
-                </td>
-                <td className="py-2 text-right text-slate-700 dark:text-slate-300">
-                  {formatTokens(row.outputTokens)}
-                </td>
-                <td className="py-2 text-right text-slate-700 dark:text-slate-300">
-                  {formatTokens(row.cacheCreationTokens)}
-                </td>
-                <td className="py-2 text-right text-slate-700 dark:text-slate-300">
-                  {formatTokens(row.cacheReadTokens)}
-                </td>
-                <td className="py-2 text-right text-slate-600 dark:text-slate-400 font-medium">
-                  {formatCost(row.costUsd)}
-                </td>
+                <td className="py-2 text-right tabular">{formatTokens(row.inputTokens)}</td>
+                <td className="py-2 text-right tabular">{formatTokens(row.outputTokens)}</td>
+                <td className="py-2 text-right tabular">{formatTokens(row.cacheCreationTokens)}</td>
+                <td className="py-2 text-right tabular">{formatTokens(row.cacheReadTokens)}</td>
+                <td className="py-2 text-right tabular font-medium text-ink-2">{formatCost(row.costUsd)}</td>
               </tr>
             );
           })}

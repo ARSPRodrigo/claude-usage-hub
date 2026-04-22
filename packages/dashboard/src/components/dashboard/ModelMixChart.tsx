@@ -1,6 +1,5 @@
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { getModelColors, getTheme } from '@/lib/chart-theme';
-import { useDarkMode } from '@/lib/useDarkMode';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { getModelColors } from '@/lib/chart-theme';
 import { modelShortName, formatTokens } from '@/lib/utils';
 
 interface ModelMixEntry {
@@ -15,22 +14,32 @@ interface ModelMixChartProps {
   isLoading: boolean;
 }
 
-export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
-  const isDark = useDarkMode();
-  const theme = getTheme(isDark);
+function HBar({ value, max, color }: { value: number; max: number; color: string }) {
+  return (
+    <div className="h-1.5 bg-line-2 rounded-sm overflow-hidden w-full">
+      <div
+        className="h-full rounded-sm"
+        style={{ width: `${(value / max) * 100}%`, background: color }}
+      />
+    </div>
+  );
+}
 
+export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex items-center justify-center">
-        <div className="w-32 h-32 rounded-full bg-slate-200 dark:bg-dark-700 animate-pulse" />
+      <div className="rounded-card border border-line bg-surface h-full flex items-center justify-center min-h-[360px]">
+        <div className="w-32 h-32 rounded-full bg-line-2 animate-pulse" />
       </div>
     );
   }
 
+  const modelColors = getModelColors();
+
   const aggregated = new Map<string, { tokens: number; percentage: number; color: string }>();
   for (const d of data) {
     const name = modelShortName(d.model);
-    const color = getModelColors(isDark)[name as keyof ReturnType<typeof getModelColors>] ?? '#94a3b8';
+    const color = modelColors[name] ?? 'var(--ink-3)';
     const existing = aggregated.get(name);
     if (existing) {
       existing.tokens += d.totalTokens;
@@ -43,8 +52,8 @@ export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
 
   if (chartData.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex items-center justify-center">
-        <p className="text-slate-500 dark:text-slate-500 text-sm">No data</p>
+      <div className="rounded-card border border-line bg-surface h-full flex items-center justify-center min-h-[360px]">
+        <p className="text-ink-3 text-sm">No data</p>
       </div>
     );
   }
@@ -52,65 +61,65 @@ export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
   const totalTokens = chartData.reduce((sum, d) => sum + d.tokens, 0);
 
   return (
-    <div className="rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 p-5 h-80 flex flex-col">
-      <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">Model Mix</h3>
-
-      <div className="relative flex-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData}
-              dataKey="tokens"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={55}
-              outerRadius={80}
-              paddingAngle={2}
-              stroke="none"
-            >
-              {chartData.map((entry, i) => (
-                <Cell key={i} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value: number) => formatTokens(value)}
-              contentStyle={{
-                backgroundColor: theme.tooltipBg,
-                border: `1px solid ${theme.tooltipBorder}`,
-                borderRadius: '8px',
-                color: theme.tooltipText,
-                fontSize: '13px',
-              }}
-              itemStyle={{ color: theme.tooltipText }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-
-        {/* Center label */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center" style={{ marginTop: '-4px' }}>
-            <p className="text-lg font-semibold text-slate-800 dark:text-slate-200">
-              {formatTokens(totalTokens)}
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">total</p>
-          </div>
+    <div className="rounded-card border border-line bg-surface flex flex-col">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-line-2">
+        <div className="label">02 · Model mix</div>
+        <div className="text-[15.5px] font-medium mt-1.5" style={{ letterSpacing: '-0.01em' }}>
+          Distribution
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="mt-2 space-y-2">
-        {chartData.map((d) => (
-          <div key={d.name} className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-              <span className="text-slate-600 dark:text-slate-400">{d.name}</span>
+      {/* Donut + legend */}
+      <div className="px-5 py-5 flex flex-col items-center">
+        <div className="relative" style={{ width: 170, height: 170 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={chartData}
+                dataKey="tokens"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={67}
+                outerRadius={85}
+                paddingAngle={0}
+                stroke="none"
+              >
+                {chartData.map((entry, i) => (
+                  <Cell key={i} fill={entry.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center">
+              <div className="mono tabular text-[22px] font-semibold" style={{ letterSpacing: '-0.02em' }}>
+                {formatTokens(totalTokens)}
+              </div>
+              <div className="label mt-1">TOTAL</div>
             </div>
-            <span className="text-slate-800 dark:text-slate-200 font-medium">
-              {d.percentage.toFixed(1)}%
-            </span>
           </div>
-        ))}
+        </div>
+
+        {/* Model rows */}
+        <div className="w-full mt-5 flex flex-col gap-2.5">
+          {chartData.map((d) => {
+            const pct = (d.tokens / totalTokens) * 100;
+            return (
+              <div key={d.name}>
+                <div className="flex items-center justify-between text-[12.5px] mb-1">
+                  <span className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-sm" style={{ background: d.color }} />
+                    <span className="font-medium">{d.name}</span>
+                  </span>
+                  <span className="mono tabular text-ink-2">{pct.toFixed(1)}%</span>
+                </div>
+                <HBar value={d.tokens} max={totalTokens} color={d.color} />
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

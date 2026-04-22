@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, apiDelete, getUser } from '@/api/client';
-import { Mail, Link, Trash2, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Plus, Copy, Trash2 } from 'lucide-react';
 
 interface Invitation {
   id: string;
@@ -41,31 +41,22 @@ async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function StatusBadge({ status }: { status: Invitation['status'] }) {
-  const map = {
-    pending: { label: 'Pending', icon: Clock, cls: 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' },
-    accepted: { label: 'Accepted', icon: CheckCircle, cls: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20' },
-    expired: { label: 'Expired', icon: XCircle, cls: 'text-slate-500 bg-slate-100 dark:bg-dark-800' },
-  };
-  const { label, icon: Icon, cls } = map[status];
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
-      <Icon className="h-3 w-3" /> {label}
-    </span>
-  );
+function formatRelativeTime(ts: string): string {
+  const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+  if (diff < 0) {
+    const futureDays = Math.ceil(Math.abs(diff) / 86400);
+    return `${futureDays}d`;
+  }
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
-const ROLE_BADGE: Record<string, string> = {
-  primary_owner: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
-  owner: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-  developer: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  primary_owner: 'Primary Owner',
-  owner: 'Owner',
-  developer: 'Developer',
-};
+function expiresIn(ts: string): string {
+  const diff = (new Date(ts).getTime() - Date.now()) / 1000;
+  if (diff <= 0) return 'expired';
+  const days = Math.ceil(diff / 86400);
+  return `${days}d`;
+}
 
 export function AdminTeamPage() {
   const qc = useQueryClient();
@@ -103,18 +94,6 @@ export function AdminTeamPage() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-invitations'] }),
   });
 
-  const resendInvite = useMutation({
-    mutationFn: ({ email, role }: { email: string; role: string }) =>
-      apiPost<{ id: string; inviteUrl: string; email: string; expiresAt: string }>(
-        '/api/v1/admin/invitations',
-        { email, role },
-      ),
-    onSuccess: (data) => {
-      setInviteUrl(data.inviteUrl);
-      void qc.invalidateQueries({ queryKey: ['admin-invitations'] });
-    },
-  });
-
   const changeRole = useMutation({
     mutationFn: ({ id, role }: { id: string; role: string }) =>
       apiPatch<{ ok: boolean }>(`/api/v1/admin/developers/${id}/role`, { role }),
@@ -128,191 +107,152 @@ export function AdminTeamPage() {
     });
   };
 
-  const owners = members.filter((m) => m.role === 'primary_owner' || m.role === 'owner');
-  const developers = members.filter((m) => m.role === 'developer');
+  const pendingInvites = invitations.filter((inv) => inv.status === 'pending');
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Team</h1>
+    <div>
+      {/* Page header */}
+      <div className="mb-6">
+        <div className="label mb-2">ORGANIZATION · /TEAM</div>
+        <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Team</h1>
+        <div className="text-ink-3 mt-2 text-sm">Invites, roles and API keys.</div>
+      </div>
 
-      {/* Invite form */}
-      <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800 p-5">
-        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-          <Mail className="h-4 w-4" /> Invite a member
-        </h2>
-        <div className="flex gap-2">
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => { setInviteEmail(e.target.value); setInviteUrl(null); }}
-            placeholder="name@example.com"
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            onKeyDown={(e) => { if (e.key === 'Enter' && inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole }); }}
-          />
-          <select
-            value={inviteRole}
-            onChange={(e) => setInviteRole(e.target.value as 'developer' | 'owner')}
-            className="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          >
-            <option value="developer">Member</option>
-            <option value="owner">Owner</option>
-          </select>
-          <button
-            onClick={() => { if (inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole }); }}
-            disabled={!inviteEmail.trim() || createInvite.isPending}
-            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors"
-          >
-            Generate link
-          </button>
+      {/* Pending invites card */}
+      <div className="rounded-card border border-line bg-surface mb-4">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line-2">
+          <div>
+            <div className="text-[15px] font-medium">Pending invites</div>
+            <div className="text-ink-3 text-[13px] mt-1">
+              {pendingInvites.length} invite{pendingInvites.length !== 1 ? 's' : ''} outstanding.
+            </div>
+          </div>
+          <div className="flex gap-2 items-center">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => { setInviteEmail(e.target.value); setInviteUrl(null); }}
+              placeholder="name@example.com"
+              className="px-3 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none w-52"
+              onKeyDown={(e) => { if (e.key === 'Enter' && inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole }); }}
+            />
+            <select
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value as 'developer' | 'owner')}
+              className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+            >
+              <option value="developer">Developer</option>
+              <option value="owner">Owner</option>
+            </select>
+            <button
+              onClick={() => { if (inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole }); }}
+              disabled={!inviteEmail.trim() || createInvite.isPending}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New invite
+            </button>
+          </div>
         </div>
 
         {createInvite.isError && (
-          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+          <div className="px-5 py-2 text-xs text-neg">
             {createInvite.error instanceof Error ? createInvite.error.message : 'Failed to create invitation'}
-          </p>
+          </div>
         )}
 
         {inviteUrl && (
-          <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-            <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1">
-              <Link className="h-3 w-3" /> Share this link via Slack/chat — expires in 7 days
-            </p>
+          <div className="px-5 py-3 border-b border-line-2" style={{ background: 'color-mix(in oklch, var(--accent) 6%, transparent)' }}>
             <div className="flex items-center gap-2">
-              <code className="text-xs text-blue-800 dark:text-blue-300 flex-1 break-all font-mono">{inviteUrl}</code>
+              <code className="mono text-xs flex-1 break-all">{inviteUrl}</code>
               <button
                 onClick={() => copyLink(inviteUrl)}
-                className="shrink-0 px-3 py-1 text-xs rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                className="px-3 py-1 text-xs rounded-pill bg-ink text-canvas font-medium"
               >
                 {copied ? 'Copied!' : 'Copy'}
               </button>
             </div>
           </div>
         )}
+
+        {pendingInvites.map((inv, i) => (
+          <div
+            key={inv.id}
+            className="flex items-center justify-between px-5 py-3"
+            style={{ borderTop: i === 0 && !inviteUrl ? 'none' : '1px solid var(--line-2)' }}
+          >
+            <div>
+              <div className="mono text-[13px]">{inv.email}</div>
+              <div className="mono text-[10.5px] text-ink-3 mt-0.5" style={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                {inv.role} · expires in {expiresIn(inv.expiresAt)}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => copyLink(`${window.location.origin}/invite/accept?token=${inv.id}`)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line bg-surface rounded-btn text-[13px] font-medium text-ink cursor-pointer hover:bg-canvas-alt transition-colors"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy link
+              </button>
+              <button
+                onClick={() => revokeInvite.mutate(inv.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line bg-surface rounded-btn text-[13px] font-medium text-ink cursor-pointer hover:bg-canvas-alt transition-colors"
+              >
+                Revoke
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Invitations list */}
-      {invitations.length > 0 && (
-        <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Invitations</h2>
+      {/* Members list */}
+      {members.length > 0 && (
+        <div className="rounded-card border border-line bg-surface">
+          <div className="px-5 py-4 border-b border-line-2">
+            <div className="text-[15px] font-medium">Members ({members.length})</div>
           </div>
-          <ul className="divide-y divide-slate-100 dark:divide-dark-800">
-            {invitations.map((inv) => (
-              <li key={inv.id} className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={inv.status} />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-slate-800 dark:text-slate-200">{inv.email}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[inv.role] ?? ROLE_BADGE['developer']}`}>
-                        {ROLE_LABEL[inv.role] ?? inv.role}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400">
-                      {inv.status === 'accepted'
-                        ? `Accepted ${new Date(inv.acceptedAt!).toLocaleDateString()}`
-                        : `Expires ${new Date(inv.expiresAt).toLocaleDateString()}`}
-                    </p>
-                  </div>
+          {members.map((m, i) => (
+            <div
+              key={m.id}
+              className="flex items-center justify-between px-5 py-3"
+              style={{ borderTop: i === 0 ? 'none' : '1px solid var(--line-2)' }}
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-7 h-7 rounded-full text-white grid place-items-center text-[10px] font-semibold flex-shrink-0"
+                  style={{ background: `oklch(0.7 0.12 ${(i * 55) % 360})` }}
+                >
+                  {m.displayName.split(' ').map((n) => n[0]).join('')}
                 </div>
-                <div className="flex items-center gap-2">
-                  {inv.status === 'expired' && (
-                    <button
-                      onClick={() => resendInvite.mutate({ email: inv.email, role: inv.role })}
-                      disabled={resendInvite.isPending}
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
-                    >
-                      Resend
-                    </button>
-                  )}
-                  {inv.status === 'pending' && (
-                    <button
-                      onClick={() => revokeInvite.mutate(inv.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                      title="Revoke invitation"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Owners section */}
-      {owners.length > 0 && (
-        <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              Owners ({owners.length})
-            </h2>
-          </div>
-          <ul className="divide-y divide-slate-100 dark:divide-dark-800">
-            {owners.map((m) => (
-              <li key={m.id} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{m.displayName}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[m.role] ?? ROLE_BADGE['developer']}`}>
-                      {ROLE_LABEL[m.role] ?? m.role}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400">{m.email}</p>
+                  <div className="font-medium text-[13px]">{m.displayName}</div>
+                  <div className="mono text-[10.5px] text-ink-3">{m.email}</div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {m.role !== 'primary_owner' && m.id !== currentUser?.id && (
-                    <select
-                      value={m.role}
-                      onChange={(e) => changeRole.mutate({ id: m.id, role: e.target.value })}
-                      className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-700 dark:text-slate-300"
-                    >
-                      <option value="owner">Owner</option>
-                      <option value="developer">Developer</option>
-                    </select>
-                  )}
-                  <p className="text-xs text-slate-400">Joined {new Date(m.createdAt).toLocaleDateString()}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Members (developers) section */}
-      <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-            Members ({developers.length})
-          </h2>
-        </div>
-        {developers.length === 0 ? (
-          <p className="p-4 text-sm text-slate-400">No members yet. Invite someone above.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100 dark:divide-dark-800">
-            {developers.map((m) => (
-              <li key={m.id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{m.displayName}</p>
-                  <p className="text-xs text-slate-400">{m.email}</p>
-                </div>
-                <div className="flex items-center gap-3">
+              </div>
+              <div className="flex items-center gap-3">
+                {m.role !== 'primary_owner' && m.id !== currentUser?.id && (
                   <select
                     value={m.role}
                     onChange={(e) => changeRole.mutate({ id: m.id, role: e.target.value })}
-                    className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-slate-700 dark:text-slate-300"
+                    className="mono text-[10.5px] px-2 py-1 rounded-pill border border-line bg-surface text-ink"
+                    style={{ letterSpacing: '0.04em' }}
                   >
                     <option value="owner">Owner</option>
                     <option value="developer">Developer</option>
                   </select>
-                  <p className="text-xs text-slate-400">Joined {new Date(m.createdAt).toLocaleDateString()}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                )}
+                <span
+                  className="mono text-[10.5px] px-2 py-0.5 rounded-pill border border-line text-ink-2"
+                  style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}
+                >
+                  {m.role === 'primary_owner' ? 'Primary' : m.role}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

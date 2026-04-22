@@ -43,34 +43,13 @@ export function formatDate(iso: string): string {
   });
 }
 
-export function modelColor(model: string): string {
-  if (model.includes('opus')) return 'cyan';
-  if (model.includes('sonnet')) return 'purple';
-  if (model.includes('haiku')) return 'fuchsia';
-  return 'slate';
-}
-
-/**
- * Get inline style for a model badge.
- * Uses the same hex colors as the charts for consistency.
- */
-export function modelBadgeStyle(name: string, isDark: boolean): { backgroundColor: string; color: string } {
-  const darkColors: Record<string, string> = {
-    Opus: '#22d3ee',
-    Sonnet: '#a855f7',
-    Haiku: '#d946ef',
-  };
-  const lightColors: Record<string, string> = {
-    Opus: '#0891b2',
-    Sonnet: '#7c3aed',
-    Haiku: '#c026d3',
-  };
-
-  const color = (isDark ? darkColors : lightColors)[name] ?? '#94a3b8';
-  return {
-    backgroundColor: `${color}${isDark ? '20' : '15'}`,
-    color,
-  };
+export function formatRelative(ts: string | number): string {
+  const date = typeof ts === 'number' ? ts : new Date(ts).getTime();
+  const diff = (Date.now() - date) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 export function modelShortName(model: string): string {
@@ -78,4 +57,27 @@ export function modelShortName(model: string): string {
   if (model.includes('sonnet')) return 'Sonnet';
   if (model.includes('haiku')) return 'Haiku';
   return model;
+}
+
+/**
+ * Get inline style for a model badge — uses CSS custom properties.
+ */
+export function modelBadgeStyle(name: string, _isDark?: boolean): { backgroundColor: string; color: string } {
+  const colorMap: Record<string, string> = {
+    Opus: 'var(--m-opus)',
+    Sonnet: 'var(--m-sonnet)',
+    Haiku: 'var(--m-haiku)',
+  };
+  const color = colorMap[name] ?? 'var(--ink-3)';
+  return {
+    backgroundColor: `color-mix(in oklch, ${color} 14%, transparent)`,
+    color,
+  };
+}
+
+export function modelColor(model: string): string {
+  if (model.includes('opus')) return 'var(--m-opus)';
+  if (model.includes('sonnet')) return 'var(--m-sonnet)';
+  if (model.includes('haiku')) return 'var(--m-haiku)';
+  return 'var(--ink-3)';
 }
