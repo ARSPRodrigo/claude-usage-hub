@@ -235,6 +235,8 @@ export function installWindows(nodePath: string, cliPath: string, logDir: string
   try {
     execSync(`schtasks /create /xml "${xmlPath}" /tn "${DAEMON_LABEL}" /f`, { stdio: 'pipe' });
     try { unlinkSync(xmlPath); } catch { /* ok */ }
+    // Start the task immediately (schtasks /create only registers it for next logon)
+    try { execSync(`schtasks /run /tn "${DAEMON_LABEL}"`, { stdio: 'pipe' }); } catch { /* ok if it fails */ }
     return { ok: true };
   } catch (err) {
     return {
