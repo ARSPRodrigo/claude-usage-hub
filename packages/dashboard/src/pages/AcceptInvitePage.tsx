@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Gauge } from 'lucide-react';
 import { setToken, setUser, type StoredUser } from '@/api/client';
 import { fetchServerConfig, useGoogleScript } from '@/lib/useGoogleSignIn';
 
@@ -41,7 +42,6 @@ export function AcceptInvitePage() {
             setToken(data.token!);
             setUser(data.user! as StoredUser);
 
-            // Store API key in sessionStorage — shown once on setup page
             if (data.apiKey) {
               sessionStorage.setItem('chub_setup_key', JSON.stringify(data.apiKey));
             }
@@ -66,31 +66,34 @@ export function AcceptInvitePage() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-dark-950">
-        <div className="text-center text-red-600 dark:text-red-400">Invalid invitation link.</div>
+      <div className="min-h-screen flex items-center justify-center bg-canvas">
+        <div className="text-center text-neg">Invalid invitation link.</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-dark-950">
-      <div className="w-full max-w-sm p-8 bg-white dark:bg-dark-900 rounded-2xl shadow-lg border border-slate-200 dark:border-dark-800">
+    <div className="min-h-screen flex items-center justify-center bg-canvas">
+      <div className="w-full max-w-sm p-8 bg-surface rounded-card shadow-popover border border-line">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">You're invited!</h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4" style={{ background: 'color-mix(in oklch, var(--accent) 10%, transparent)' }}>
+            <Gauge className="h-6 w-6 text-accent" />
+          </div>
+          <h1 className="text-2xl font-bold text-ink">You&apos;re invited!</h1>
+          <p className="mt-2 text-sm text-ink-3">
             Sign in with your organization Google account to join Claude Usage Hub.
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+          <div className="mb-4 p-3 rounded-btn text-sm text-neg" style={{ background: 'color-mix(in oklch, var(--neg) 8%, transparent)', border: '1px solid color-mix(in oklch, var(--neg) 20%, transparent)' }}>
             {error}
           </div>
         )}
 
         <div className="flex justify-center">
           {loading ? (
-            <div className="h-10 flex items-center text-sm text-slate-500">Setting up your account…</div>
+            <div className="h-10 flex items-center text-sm text-ink-3">Setting up your account…</div>
           ) : (
             <div ref={buttonRef} />
           )}
