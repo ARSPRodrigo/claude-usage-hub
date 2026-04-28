@@ -1,6 +1,6 @@
 import {
   BarChart3, FolderOpen, Clock, Building2, Users,
-  ChevronUp, User, Settings, LogOut, Sun, Moon,
+  ChevronUp, User, Settings, LogOut,
   Gauge, HelpCircle,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -13,6 +13,8 @@ type Page = 'dashboard' | 'sessions' | 'projects' | 'profile' | 'admin-org' | 'a
 interface SidebarProps {
   activePage: Page;
   onNavigate: (page: Page) => void;
+  dark: boolean;
+  setDark: (dark: boolean) => void;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -21,26 +23,13 @@ const ROLE_LABELS: Record<string, string> = {
   developer: 'Developer',
 };
 
-export function Sidebar({ activePage, onNavigate }: SidebarProps) {
+export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps) {
   const health = useHealth();
   const user = getUser();
   const isAdmin = user?.role === 'primary_owner' || user?.role === 'owner';
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const [dark, setDark] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return (
-      localStorage.getItem('theme') === 'dark' ||
-      (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)
-    );
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
-  }, [dark]);
 
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent) {
@@ -145,18 +134,6 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
           <div
             className="absolute bottom-[calc(100%+4px)] left-2.5 right-2.5 bg-surface border border-line rounded-card shadow-popover overflow-hidden z-50"
           >
-            {/* Appearance */}
-            <div className="px-3 py-2.5 flex items-center justify-between border-b border-line-2">
-              <span className="label">Appearance</span>
-              <button
-                onClick={() => setDark(!dark)}
-                className="inline-flex items-center gap-1.5 px-2 py-1 bg-canvas-alt border border-line rounded-btn cursor-pointer text-[11px] font-medium text-ink-2"
-              >
-                {dark ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />}
-                {dark ? 'Light' : 'Dark'}
-              </button>
-            </div>
-
             {/* Menu links */}
             {[
               { id: 'profile' as Page, label: 'Profile & keys', Icon: User },
