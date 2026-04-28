@@ -2,7 +2,28 @@
 
 A self-hosted, open-source tool for monitoring Claude Code token usage across your entire team. Track token consumption, cost breakdowns, and per-developer visibility — all from a central web dashboard.
 
-> **v0.2.0-beta** — Team mode is live. Local mode is still fully supported with no configuration changes required.
+> **v0.3.0-beta** — New "Signal" UI redesign with oklch design tokens, warm editorial aesthetic, and muted model colors.
+
+## Screenshots
+
+### Dashboard
+![Dashboard — Light](docs/screenshots/dashboard-light.png)
+![Dashboard — Dark](docs/screenshots/dashboard-dark.png)
+
+### Sessions
+![Sessions](docs/screenshots/sessions-light.png)
+
+### Projects
+![Projects](docs/screenshots/projects-light.png)
+
+### Team Overview (Admin)
+![Team Overview](docs/screenshots/org-light.png)
+
+### Profile & Keys
+![Profile & Keys](docs/screenshots/profile-light.png)
+
+### Help & Docs
+![Help](docs/screenshots/help-light.png)
 
 ## Features
 
@@ -79,6 +100,7 @@ Developer Machine A         Developer Machine B
 | Database | SQLite (better-sqlite3) |
 | Auth | JWT (HS256) + Google Identity Services |
 | Frontend | React + Vite + Tailwind CSS + Recharts + TanStack Query |
+| Design | oklch color tokens, Inter Tight + JetBrains Mono |
 | Deployment | Docker multi-stage build |
 
 ## Privacy
