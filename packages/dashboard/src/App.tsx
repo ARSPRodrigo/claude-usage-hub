@@ -147,18 +147,18 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setDark(!dark)}
-              title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="p-[7px] border border-line bg-surface rounded-btn cursor-pointer text-ink-2 grid place-items-center hover:bg-canvas-alt transition-colors"
-            >
-              {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            </button>
-            <button
               onClick={() => queryClient.invalidateQueries()}
               title="Refresh"
               className="p-[7px] border border-line bg-surface rounded-btn cursor-pointer text-ink-2 grid place-items-center hover:bg-canvas-alt transition-colors"
             >
               <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setDark(!dark)}
+              title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="p-[7px] border border-line bg-surface rounded-btn cursor-pointer text-ink-2 grid place-items-center hover:bg-canvas-alt transition-colors"
+            >
+              {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
             </button>
           </div>
         </div>
