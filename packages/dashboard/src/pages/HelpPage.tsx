@@ -84,10 +84,17 @@ export function HelpPage() {
   ];
 
   const faq = [
-    ['Where does my data live?', 'On the hub server you self-host, in a SQLite file with 0600 permissions.'],
-    ['Can I delete a machine?', 'Revoke its API key on the Profile & Keys page. Historical entries are preserved unless you wipe them.'],
-    ['What if I rotate keys?', 'Generate a new key, install it on the machine, revoke the old one. Entries stay tied to the machine alias.'],
-    ['Is there an alerting system?', 'Budget thresholds and Slack/email alerts are on the roadmap.'],
+    ['What tokens are counted in "Total Tokens"?', 'All four types: input, output, cache creation, and cache read. Cache tokens (especially cache reads) often account for 95%+ of the total because Claude Code re-sends conversation context on every turn and hits the prompt cache. The headline number can look much larger than what Claude Code\'s /usage stats show, which typically counts only input + output.'],
+    ['How is cost estimated?', 'Cost is calculated using Anthropic\'s published API pricing per model and token type. Cache reads are 0.1x the input price, cache writes are 2x. The estimate reflects what the usage would cost on the API — your actual Claude Team/Pro subscription billing may differ.'],
+    ['Does this work with Claude Pro, Team, and API plans?', 'Yes. The collector reads the same local JSONL logs regardless of plan. The cost estimate uses API pricing as a reference, but on Pro/Team plans your usage is covered by the subscription.'],
+    ['Where does my data live?', 'On the hub server you self-host, in a SQLite file with 0600 permissions. Nothing is sent to Anthropic or any third party.'],
+    ['How do project aliases work?', 'Each project directory is hashed with a unique per-machine salt into a human-readable alias (e.g. "autumn-river"). The original path is never sent to the server, and the same project produces different aliases on different machines — making cross-machine correlation impossible.'],
+    ['Can multiple machines share one API key?', 'No. Each API key is tied to one machine. Generate a separate key per machine from your Profile page so you can track and revoke them independently.'],
+    ['How often does the collector sync?', 'Every 30 minutes by default. The collector reads new JSONL entries since its last run, deduplicates streaming entries (keeps only the final token count per message), and posts the batch to the server.'],
+    ['What happens if the server is down?', 'The collector will retry on the next sync cycle. Local JSONL files are the source of truth — no data is lost. Entries will be picked up once the server is reachable again.'],
+    ['Can I delete a machine?', 'Revoke its API key on the Profile & Keys page. Historical entries are preserved unless you explicitly wipe them.'],
+    ['What if I rotate keys?', 'Generate a new key, install it on the machine, revoke the old one. Historical entries stay tied to the machine alias, not the key.'],
+    ['Is there an alerting system?', 'Not yet. Budget thresholds and Slack/email alerts are on the roadmap.'],
   ];
 
   return (
@@ -146,8 +153,8 @@ export function HelpPage() {
           </div>
         </div>
 
-        {/* Side rail */}
-        <div className="flex flex-col gap-3.5">
+        {/* Side rail — sticky so it stays visible while scrolling */}
+        <div className="flex flex-col gap-3.5 sticky top-[60px] self-start">
           {/* Jump to */}
           <div className="rounded-card border border-line bg-surface p-4">
             <div className="label mb-2.5">Jump to</div>
