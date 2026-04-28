@@ -62,33 +62,45 @@ A self-hosted, open-source tool for monitoring Claude Code token usage across yo
 
 ## Architecture
 
-```
-Local mode
-──────────
-~/.claude/projects/**/*.jsonl
-        │
-        ▼
-┌───────────────┐    ┌──────────────┐    ┌────────────────┐
-│  Collector    │───▶│   SQLite DB  │───▶│ React Dashboard│
-│  (same proc)  │    │  (local)     │    │  :8080         │
-└───────────────┘    └──────────────┘    └────────────────┘
+### Local mode
 
-Team mode
-─────────
-Developer Machine A         Developer Machine B
-~/.claude/projects/         ~/.claude/projects/
-        │                           │
-   Collector                   Collector
-   (API key A)                 (API key B)
-        │                           │
-        └──────────┬────────────────┘
-                   │ HTTPS + X-API-Key
-                   ▼
-        ┌──────────────────┐
-        │  Hono Server     │
-        │  SQLite (Docker) │
-        │  React Dashboard │
-        └──────────────────┘
+```mermaid
+flowchart LR
+    A["~/.claude/projects/**/*.jsonl"] --> B["Collector\n(same process)"]
+    B --> C[("SQLite DB\n(local)")]
+    C --> D["React Dashboard\n:8080"]
+
+    style A fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style B fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style C fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style D fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+```
+
+### Team mode
+
+```mermaid
+flowchart TB
+    subgraph machineA ["Developer Machine A"]
+        A1["~/.claude/projects/"] --> C1["Collector\n(API key A)"]
+    end
+
+    subgraph machineB ["Developer Machine B"]
+        A2["~/.claude/projects/"] --> C2["Collector\n(API key B)"]
+    end
+
+    subgraph server ["Central Server (Docker)"]
+        S1["Hono Server"]
+        S2[("SQLite DB")]
+        S3["React Dashboard"]
+        S1 --> S2 --> S3
+    end
+
+    C1 -- "HTTPS + X-API-Key" --> S1
+    C2 -- "HTTPS + X-API-Key" --> S1
+
+    style machineA fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style machineB fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style server fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
 ```
 
 ## Tech Stack
