@@ -1,15 +1,27 @@
-import { useState } from 'react';
 import { ArrowRight, ExternalLink, ChevronDown } from 'lucide-react';
 import { getUser } from '@/api/client';
 import { useHealth } from '@/api/hooks';
 
+const GITHUB_REPO = 'https://github.com/ARSPRodrigo/claude-usage-hub';
+
+const JUMP_TO: { label: string; id: string }[] = [
+  { label: 'Quickstart', id: 'quickstart' },
+  { label: 'Roles & permissions', id: 'roles' },
+  { label: 'Privacy', id: 'privacy' },
+  { label: 'FAQ', id: 'faq' },
+];
+
+function scrollTo(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 export function HelpPage() {
   const user = getUser();
   const health = useHealth();
-  const isAdmin = user?.role === 'primary_owner' || user?.role === 'owner';
 
   const sections = [
     {
+      id: 'quickstart',
       label: 'H1',
       title: 'Quickstart',
       body: (
@@ -29,6 +41,7 @@ export function HelpPage() {
       ),
     },
     {
+      id: 'roles',
       label: 'H2',
       title: 'Roles & permissions',
       body: (
@@ -57,6 +70,7 @@ export function HelpPage() {
       ),
     },
     {
+      id: 'privacy',
       label: 'H3',
       title: 'Privacy',
       body: (
@@ -87,10 +101,15 @@ export function HelpPage() {
             Self-hosted, open source, privacy-first token tracking for Claude Code.
           </div>
         </div>
-        <button className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line bg-surface rounded-btn text-[13px] font-medium text-ink cursor-pointer hover:bg-canvas-alt transition-colors">
+        <a
+          href={GITHUB_REPO}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line bg-surface rounded-btn text-[13px] font-medium text-ink hover:bg-canvas-alt transition-colors"
+        >
           <ExternalLink className="h-3.5 w-3.5" />
           GitHub
-        </button>
+        </a>
       </div>
 
       {/* Two-column layout */}
@@ -98,7 +117,7 @@ export function HelpPage() {
         {/* Main column */}
         <div className="flex flex-col gap-4">
           {sections.map((s) => (
-            <div key={s.title} className="rounded-card border border-line bg-surface">
+            <div key={s.id} id={s.id} className="rounded-card border border-line bg-surface scroll-mt-16">
               <div className="px-5 py-4 border-b border-line-2">
                 <div className="label">{s.label} · {s.title}</div>
                 <div className="text-[17px] font-medium mt-1.5" style={{ letterSpacing: '-0.015em' }}>{s.title}</div>
@@ -108,7 +127,7 @@ export function HelpPage() {
           ))}
 
           {/* FAQ */}
-          <div className="rounded-card border border-line bg-surface">
+          <div id="faq" className="rounded-card border border-line bg-surface scroll-mt-16">
             <div className="px-5 py-4 border-b border-line-2">
               <div className="label">H4 · FAQ</div>
               <div className="text-[17px] font-medium mt-1.5" style={{ letterSpacing: '-0.015em' }}>Common questions</div>
@@ -133,10 +152,14 @@ export function HelpPage() {
           <div className="rounded-card border border-line bg-surface p-4">
             <div className="label mb-2.5">Jump to</div>
             <div className="flex flex-col gap-2">
-              {['Quickstart', 'Roles & permissions', 'Privacy', 'FAQ'].map((t) => (
-                <a key={t} href="#" className="text-[13px] text-ink-2 flex items-center justify-between hover:text-ink transition-colors">
-                  {t} <ArrowRight className="h-3 w-3" />
-                </a>
+              {JUMP_TO.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => scrollTo(item.id)}
+                  className="text-[13px] text-ink-2 flex items-center justify-between hover:text-ink transition-colors cursor-pointer bg-transparent border-none p-0 text-left"
+                >
+                  {item.label} <ArrowRight className="h-3 w-3" />
+                </button>
               ))}
             </div>
           </div>
@@ -148,16 +171,20 @@ export function HelpPage() {
             <div className="text-[12.5px] mb-3.5 leading-relaxed" style={{ color: 'color-mix(in oklch, var(--bg) 70%, transparent)' }}>
               This is an open-source tool. The fastest path to fixes is a reproducible issue.
             </div>
-            <button className="inline-flex items-center gap-1.5 px-3 py-[7px] bg-canvas text-ink rounded-btn text-[12.5px] font-medium cursor-pointer">
+            <a
+              href={`${GITHUB_REPO}/issues/new`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-[7px] bg-canvas text-ink rounded-btn text-[12.5px] font-medium cursor-pointer"
+            >
               Report issue <ExternalLink className="h-3 w-3" />
-            </button>
+            </a>
           </div>
 
           {/* Version */}
           <div className="rounded-card border border-line bg-surface p-4">
             <div className="label mb-2">Version</div>
-            <div className="mono text-[13px]">v{health.data?.version ?? '0.2.0'}-beta</div>
-            <div className="mono text-[11px] text-ink-3 mt-1">built Apr 22, 2026</div>
+            <div className="mono text-[13px]">v{health.data?.version ?? '0.3.0'}-beta</div>
           </div>
         </div>
       </div>
