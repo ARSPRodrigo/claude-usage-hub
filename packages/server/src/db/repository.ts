@@ -532,6 +532,46 @@ export function getCostBreakdown(range: TimeRange, developerId?: string): CostBr
 }
 
 /**
+ * Get aggregate token totals + actual cost for cost comparison.
+ */
+export function getAggregateTokens(
+  range: TimeRange,
+  developerId?: string,
+): { inputTokens: number; outputTokens: number; cacheCreationTokens: number; cacheReadTokens: number; actualCost: number } {
+  const raw = getRawDb();
+  const where = whereClause(range, developerId);
+
+  const row = raw
+    .prepare(
+      `
+    SELECT
+      COALESCE(SUM(input_tokens), 0) as input_tokens,
+      COALESCE(SUM(output_tokens), 0) as output_tokens,
+      COALESCE(SUM(cache_creation_tokens), 0) as cache_creation_tokens,
+      COALESCE(SUM(cache_read_tokens), 0) as cache_read_tokens,
+      COALESCE(SUM(cost_usd), 0) as actual_cost
+    FROM usage_entries
+    ${where.sql}
+  `,
+    )
+    .get(...where.params) as {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_tokens: number;
+    cache_read_tokens: number;
+    actual_cost: number;
+  };
+
+  return {
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    cacheCreationTokens: row.cache_creation_tokens,
+    cacheReadTokens: row.cache_read_tokens,
+    actualCost: row.actual_cost,
+  };
+}
+
+/**
  * Get session count for a time range (for pagination).
  */
 export function getSessionCount(range: TimeRange, developerId?: string): number {

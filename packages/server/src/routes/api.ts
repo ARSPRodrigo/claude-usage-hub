@@ -20,7 +20,9 @@ import {
   getProjectDetail,
   getEntryCount,
   getLastEntryTimestamp,
+  getAggregateTokens,
 } from '../db/repository.js';
+import { computeComparisonCosts } from '@claude-usage-hub/shared';
 import { ingestPayload } from '../services/ingest.js';
 
 const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
@@ -122,6 +124,29 @@ api.get('/dashboard/model-mix', (c) => {
 api.get('/dashboard/cost-breakdown', (c) => {
   const range = parseRange(c);
   return c.json(getCostBreakdown(range, getDeveloperScope(c)));
+});
+
+// Cost comparison — reprice actual usage against 15 LLM models
+api.get('/dashboard/cost-comparison', (c) => {
+  const range = parseRange(c);
+  const agg = getAggregateTokens(range, getDeveloperScope(c));
+  const comparisons = computeComparisonCosts({
+    inputTokens: agg.inputTokens,
+    outputTokens: agg.outputTokens,
+    cacheCreationTokens: agg.cacheCreationTokens,
+    cacheReadTokens: agg.cacheReadTokens,
+  });
+  return c.json({
+    tokens: {
+      inputTokens: agg.inputTokens,
+      outputTokens: agg.outputTokens,
+      cacheCreationTokens: agg.cacheCreationTokens,
+      cacheReadTokens: agg.cacheReadTokens,
+      totalTokens: agg.inputTokens + agg.outputTokens + agg.cacheCreationTokens + agg.cacheReadTokens,
+    },
+    actualCost: agg.actualCost,
+    comparisons,
+  });
 });
 
 // Sessions

@@ -129,6 +129,35 @@ export function useCostBreakdown(range: TimeRange) {
   });
 }
 
+interface CostComparisonResponse {
+  tokens: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheCreationTokens: number;
+    cacheReadTokens: number;
+    totalTokens: number;
+  };
+  actualCost: number;
+  comparisons: Array<{
+    modelId: string;
+    displayName: string;
+    provider: string;
+    inputCost: number;
+    outputCost: number;
+    cacheCost: number;
+    totalCost: number;
+    isAnthropic: boolean;
+  }>;
+}
+
+export function useCostComparison(range: TimeRange) {
+  return useQuery({
+    queryKey: ['cost-comparison', range],
+    queryFn: () => apiGet<CostComparisonResponse>('/api/v1/dashboard/cost-comparison', { range }),
+    refetchInterval: 60_000,
+  });
+}
+
 export function useProjects(range: TimeRange) {
   return useQuery({
     queryKey: ['projects', range],
