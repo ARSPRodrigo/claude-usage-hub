@@ -2,7 +2,28 @@
 
 A self-hosted, open-source tool for monitoring Claude Code token usage across your entire team. Track token consumption, cost breakdowns, and per-developer visibility — all from a central web dashboard.
 
-> **v0.2.0-beta** — Team mode is live. Local mode is still fully supported with no configuration changes required.
+> **v0.3.0-beta** — New "Signal" UI redesign with oklch design tokens, warm editorial aesthetic, and muted model colors.
+
+## Screenshots
+
+### Dashboard
+![Dashboard — Light](docs/screenshots/dashboard-light.png)
+![Dashboard — Dark](docs/screenshots/dashboard-dark.png)
+
+### Sessions
+![Sessions](docs/screenshots/sessions-light.png)
+
+### Projects
+![Projects](docs/screenshots/projects-light.png)
+
+### Team Overview (Admin)
+![Team Overview](docs/screenshots/org-light.png)
+
+### Profile & Keys
+![Profile & Keys](docs/screenshots/profile-light.png)
+
+### Help & Docs
+![Help](docs/screenshots/help-light.png)
 
 ## Features
 
@@ -41,33 +62,45 @@ A self-hosted, open-source tool for monitoring Claude Code token usage across yo
 
 ## Architecture
 
-```
-Local mode
-──────────
-~/.claude/projects/**/*.jsonl
-        │
-        ▼
-┌───────────────┐    ┌──────────────┐    ┌────────────────┐
-│  Collector    │───▶│   SQLite DB  │───▶│ React Dashboard│
-│  (same proc)  │    │  (local)     │    │  :8080         │
-└───────────────┘    └──────────────┘    └────────────────┘
+### Local mode
 
-Team mode
-─────────
-Developer Machine A         Developer Machine B
-~/.claude/projects/         ~/.claude/projects/
-        │                           │
-   Collector                   Collector
-   (API key A)                 (API key B)
-        │                           │
-        └──────────┬────────────────┘
-                   │ HTTPS + X-API-Key
-                   ▼
-        ┌──────────────────┐
-        │  Hono Server     │
-        │  SQLite (Docker) │
-        │  React Dashboard │
-        └──────────────────┘
+```mermaid
+flowchart LR
+    A["~/.claude/projects/**/*.jsonl"] --> B["Collector\n(same process)"]
+    B --> C[("SQLite DB\n(local)")]
+    C --> D["React Dashboard\n:8080"]
+
+    style A fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style B fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style C fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style D fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+```
+
+### Team mode
+
+```mermaid
+flowchart TB
+    subgraph machineA ["Developer Machine A"]
+        A1["~/.claude/projects/"] --> C1["Collector\n(API key A)"]
+    end
+
+    subgraph machineB ["Developer Machine B"]
+        A2["~/.claude/projects/"] --> C2["Collector\n(API key B)"]
+    end
+
+    subgraph server ["Central Server (Docker)"]
+        S1["Hono Server"]
+        S2[("SQLite DB")]
+        S3["React Dashboard"]
+        S1 --> S2 --> S3
+    end
+
+    C1 -- "HTTPS + X-API-Key" --> S1
+    C2 -- "HTTPS + X-API-Key" --> S1
+
+    style machineA fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style machineB fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
+    style server fill:#f9f5ef,stroke:#ccc,color:#1a1a2e
 ```
 
 ## Tech Stack
@@ -79,6 +112,7 @@ Developer Machine A         Developer Machine B
 | Database | SQLite (better-sqlite3) |
 | Auth | JWT (HS256) + Google Identity Services |
 | Frontend | React + Vite + Tailwind CSS + Recharts + TanStack Query |
+| Design | oklch color tokens, Inter Tight + JetBrains Mono |
 | Deployment | Docker multi-stage build |
 
 ## Privacy

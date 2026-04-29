@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiDelete, getUser } from '@/api/client';
 import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
-import { DollarSign, Zap, Users, TrendingUp, Trash2 } from 'lucide-react';
+import { Download, Plus, Trash2 } from 'lucide-react';
+import { formatTokens, formatCost, formatRelative } from '@/lib/utils';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
@@ -28,49 +29,13 @@ interface AdminOrgPageProps {
   onSelectDeveloper: (developerId: string, displayName: string) => void;
 }
 
-function StatCard({ label, value, sub, icon: Icon }: {
-  label: string;
-  value: string;
-  sub?: string;
-  icon: typeof DollarSign;
-}) {
+function HBar({ value, max, color, height = 4 }: { value: number; max: number; color: string; height?: number }) {
   return (
-    <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800 p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</span>
-        <Icon className="h-4 w-4 text-slate-400" />
-      </div>
-      <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+    <div className="bg-line-2 rounded-sm overflow-hidden w-full" style={{ height }}>
+      <div className="h-full rounded-sm" style={{ width: `${max > 0 ? (value / max) * 100 : 0}%`, background: color }} />
     </div>
   );
 }
-
-function fmt(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toString();
-}
-
-function getActivityStatus(lastSeen: string | null): { dotClass: string; label: string } {
-  if (!lastSeen) return { dotClass: 'bg-red-500', label: 'Inactive' };
-
-  const now = new Date();
-  const seen = new Date(lastSeen);
-  const diffMs = now.getTime() - seen.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-  if (diffDays < 1) return { dotClass: 'bg-green-500', label: 'Active today' };
-  if (diffDays < 7) return { dotClass: 'bg-yellow-500', label: 'Active this week' };
-  if (diffDays < 30) return { dotClass: 'bg-slate-400', label: 'This month' };
-  return { dotClass: 'bg-red-500', label: 'Inactive' };
-}
-
-const ROLE_BADGE: Record<string, string> = {
-  primary_owner: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
-  owner: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-  developer: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
-};
 
 const ROLE_LABEL: Record<string, string> = {
   primary_owner: 'Primary',
@@ -95,11 +60,6 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
     },
   });
 
-  const { data: overview } = useQuery({
-    queryKey: ['admin-overview', range],
-    queryFn: () => apiGet<DashboardStats>('/api/v1/admin/stats/overview', { range }),
-  });
-
   const { data: devStats = [] } = useQuery({
     queryKey: ['admin-dev-stats', range],
     queryFn: () => apiGet<DeveloperStat[]>('/api/v1/admin/stats/developers', { range }),
@@ -107,137 +67,163 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
 
   const totalCost = devStats.reduce((s, d) => s + d.costUsd, 0);
   const totalTokens = devStats.reduce((s, d) => s + d.totalTokens, 0);
-  const activeDevs = devStats.filter((d) => d.entryCount > 0).length;
+  const maxTokens = Math.max(...devStats.map((d) => d.totalTokens), 1);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Overview</h1>
-        <TimeRangeSelector value={range} onChange={setRange} />
+    <div>
+      {/* Page header */}
+      <div className="flex items-end justify-between mb-6 gap-5 flex-wrap">
+        <div>
+          <div className="label mb-2">ORGANIZATION · /ADMIN</div>
+          <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Team overview</h1>
+          <div className="text-ink-3 mt-2 text-sm">
+            How your organization is using Claude, by developer.
+          </div>
+        </div>
+        <div className="flex gap-2 items-center">
+          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line bg-surface rounded-btn text-[13px] font-medium text-ink cursor-pointer hover:bg-canvas-alt transition-colors">
+            <Download className="h-3.5 w-3.5" />
+            Export
+          </button>
+          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium cursor-pointer hover:opacity-90 transition-opacity">
+            <Plus className="h-3.5 w-3.5" />
+            Invite
+          </button>
+          <TimeRangeSelector value={range} onChange={setRange} />
+        </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total cost" value={`$${totalCost.toFixed(2)}`} icon={DollarSign} />
-        <StatCard label="Total tokens" value={fmt(totalTokens)} icon={Zap} />
-        <StatCard label="Active members" value={String(activeDevs)} sub={`of ${devStats.length} total`} icon={Users} />
-        <StatCard label="Today's cost" value={`$${(overview?.costToday ?? 0).toFixed(2)}`} icon={TrendingUp} />
+      {/* Stats strip */}
+      <div
+        className="grid gap-0 border border-line rounded-card bg-surface overflow-hidden mb-5"
+        style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
+      >
+        {[
+          { l: 'Developers', v: String(devStats.length) },
+          { l: 'Tokens · 30d', v: formatTokens(totalTokens) },
+          { l: 'Cost · 30d', v: formatCost(totalCost) },
+        ].map((s, i) => (
+          <div key={i} style={{ padding: '22px', borderRight: i < 2 ? '1px solid var(--line)' : 'none' }}>
+            <div className="label mb-2.5">{s.l}</div>
+            <div className="mono tabular display" style={{ fontSize: 32, fontWeight: 500, letterSpacing: '-0.025em' }}>
+              {s.v}
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Per-developer breakdown */}
-      <div className="bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-800">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-dark-800">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Per-member usage</h2>
+      {/* Members table */}
+      <div className="rounded-card border border-line bg-surface overflow-hidden">
+        <div className="px-5 py-4 border-b border-line flex items-center justify-between">
+          <div>
+            <div className="label">Members · last 30 days</div>
+            <div className="text-[15.5px] font-medium mt-1.5">Ranked by consumption</div>
+          </div>
         </div>
 
         {devStats.length === 0 ? (
-          <p className="p-4 text-sm text-slate-400">No data yet. Invite developers and get the collector running.</p>
+          <p className="p-5 text-sm text-ink-3">No data yet. Invite developers and get the collector running.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-dark-800">
-                  <th className="text-left px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Developer</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Tokens</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Cost</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">% of total</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Status</th>
-                  {isOwner && <th className="px-4 py-2" />}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50 dark:divide-dark-800">
-                {devStats.map((d) => {
-                  const pct = totalCost > 0 ? (d.costUsd / totalCost) * 100 : 0;
-                  const activity = getActivityStatus(d.lastSeen);
-                  const roleBadge = d.role ? ROLE_BADGE[d.role] : ROLE_BADGE['developer'];
-                  const roleLabel = d.role ? ROLE_LABEL[d.role] : 'Dev';
-                  const isWiping = wipingId === d.developerId;
-                  return (
-                    <tr
-                      key={d.developerId}
-                      className="group hover:bg-slate-50 dark:hover:bg-dark-800/50 cursor-pointer"
-                      onClick={() => { if (!isWiping) onSelectDeveloper(d.developerId, d.displayName); }}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-slate-800 dark:text-slate-200">{d.displayName}</p>
-                          {d.role && (
-                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${roleBadge}`}>
-                              {roleLabel}
-                            </span>
-                          )}
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-line">
+                {['#', 'Member', 'Role', 'Tokens', 'Share', 'Cost', 'Sessions', 'Last active'].map((h, i) => (
+                  <th
+                    key={h}
+                    className="label py-2.5 px-4"
+                    style={{ textAlign: i >= 3 && i < 7 ? 'right' : 'left' }}
+                  >
+                    {h}
+                  </th>
+                ))}
+                {isOwner && <th className="px-4 py-2.5" />}
+              </tr>
+            </thead>
+            <tbody>
+              {devStats.map((d, i) => {
+                const pct = totalTokens > 0 ? (d.totalTokens / totalTokens) * 100 : 0;
+                const isWiping = wipingId === d.developerId;
+                return (
+                  <tr
+                    key={d.developerId}
+                    className="group cursor-pointer hover:bg-canvas-alt transition-colors"
+                    style={{ borderBottom: i === devStats.length - 1 ? 'none' : '1px solid var(--line-2)' }}
+                    onClick={() => { if (!isWiping) onSelectDeveloper(d.developerId, d.displayName); }}
+                  >
+                    <td className="mono text-ink-4 text-[11px] px-4 py-3.5">{String(i + 1).padStart(2, '0')}</td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="w-7 h-7 rounded-full flex-shrink-0 text-white grid place-items-center text-[11px] font-semibold"
+                          style={{ background: `oklch(0.7 0.12 ${(i * 55) % 360})` }}
+                        >
+                          {d.displayName.split(' ').map((n) => n[0]).join('')}
                         </div>
-                        <p className="text-xs text-slate-400">{d.email}</p>
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums">
-                        {fmt(d.totalTokens)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums">
-                        ${d.costUsd.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 rounded-full bg-slate-100 dark:bg-dark-700 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-blue-500"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <span className="text-xs tabular-nums text-slate-500 w-8 text-right">
-                            {pct.toFixed(0)}%
-                          </span>
+                        <div>
+                          <div className="font-medium">{d.displayName}</div>
+                          <div className="mono text-[10.5px] text-ink-3 mt-px">{d.email}</div>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <div className={`h-2 w-2 rounded-full flex-shrink-0 ${activity.dotClass}`} />
-                          <span className="text-xs text-slate-500">{activity.label}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className="mono text-[10.5px] px-2 py-0.5 rounded-pill border border-line text-ink-2"
+                        style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}
+                      >
+                        {ROLE_LABEL[d.role ?? ''] ?? d.role ?? 'Dev'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right mono tabular">{formatTokens(d.totalTokens)}</td>
+                    <td className="px-4 py-3.5 text-right">
+                      <div className="flex items-center gap-2 justify-end">
+                        <div className="w-[60px]">
+                          <HBar value={d.totalTokens} max={maxTokens} color="var(--ink)" />
                         </div>
-                      </td>
-                      {isOwner && (
-                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                          {isWiping ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="text-xs text-red-600 dark:text-red-400">Wipe data?</span>
-                              <button
-                                onClick={() => wipeDeveloper.mutate(d.developerId)}
-                                disabled={wipeDeveloper.isPending}
-                                className="text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
-                              >
-                                Yes
-                              </button>
-                              <button
-                                onClick={() => setWipingId(null)}
-                                className="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-dark-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-600"
-                              >
-                                No
-                              </button>
-                            </div>
-                          ) : (
+                        <span className="mono tabular text-xs text-ink-2 min-w-[38px] text-right">
+                          {pct.toFixed(1)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-right mono tabular">{formatCost(d.costUsd)}</td>
+                    <td className="px-4 py-3.5 text-right mono tabular">{d.entryCount}</td>
+                    <td className="px-4 py-3.5 text-ink-3 text-xs">
+                      {d.lastSeen ? formatRelative(d.lastSeen) : 'Never'}
+                    </td>
+                    {isOwner && (
+                      <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        {isWiping ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-xs text-neg">Wipe data?</span>
                             <button
-                              onClick={() => setWipingId(d.developerId)}
-                              className="p-1.5 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                              title={`Wipe ${d.displayName}'s data`}
+                              onClick={() => wipeDeveloper.mutate(d.developerId)}
+                              disabled={wipeDeveloper.isPending}
+                              className="text-xs px-2 py-1 rounded bg-neg text-white disabled:opacity-50"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              Yes
                             </button>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800/50">
-                  <td className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400">Total</td>
-                  <td className="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-400 tabular-nums">{fmt(totalTokens)}</td>
-                  <td className="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-400 tabular-nums">${totalCost.toFixed(2)}</td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                            <button
+                              onClick={() => setWipingId(null)}
+                              className="text-xs px-2 py-1 rounded border border-line text-ink"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setWipingId(d.developerId)}
+                            className="p-1.5 text-ink-4 hover:text-neg transition-colors opacity-0 group-hover:opacity-100"
+                            title={`Wipe ${d.displayName}'s data`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
     </div>

@@ -1,57 +1,54 @@
 import type { TooltipProps } from 'recharts';
-import { DARK_THEME, LIGHT_THEME } from '@/lib/chart-theme';
+import { formatTokens } from '@/lib/utils';
 
 interface ChartTooltipProps extends TooltipProps<number, string> {
-  isDark: boolean;
+  isDark?: boolean;
   valueFormatter?: (value: number) => string;
 }
 
-export function ChartTooltip({ active, payload, label, isDark, valueFormatter }: ChartTooltipProps) {
+export function ChartTooltip({ active, payload, label, valueFormatter }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
 
-  const theme = isDark ? DARK_THEME : LIGHT_THEME;
   const format = valueFormatter ?? ((v: number) => v.toLocaleString());
+  const total = payload.reduce((sum, entry) => sum + ((entry.value as number) ?? 0), 0);
 
   return (
     <div
-      style={{
-        backgroundColor: theme.tooltipBg,
-        border: `1px solid ${theme.tooltipBorder}`,
-        color: theme.tooltipText,
-        borderRadius: '8px',
-        padding: '10px 14px',
-        fontSize: '13px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-      }}
+      className="bg-surface border border-line rounded-card shadow-tooltip pointer-events-none"
+      style={{ padding: '8px 10px', fontSize: '12px', minWidth: 160 }}
     >
-      <p style={{ margin: '0 0 6px', fontWeight: 500, opacity: 0.7, fontSize: '12px' }}>
+      <div
+        className="mono text-ink-3 mb-1.5"
+        style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+      >
         {label}
-      </p>
+      </div>
       {payload.map((entry, i) => (
         <div
           key={i}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginTop: i > 0 ? '4px' : 0,
-          }}
+          className="flex items-center justify-between gap-3"
+          style={{ lineHeight: '18px' }}
         >
-          <div
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: entry.color,
-              flexShrink: 0,
-            }}
-          />
-          <span style={{ opacity: 0.7 }}>{entry.name}</span>
-          <span style={{ marginLeft: 'auto', fontWeight: 600 }}>
+          <span className="flex items-center gap-1.5">
+            <span
+              className="w-2 h-2 rounded-sm flex-shrink-0"
+              style={{ backgroundColor: entry.color }}
+            />
+            <span className="text-ink-2">{entry.name}</span>
+          </span>
+          <span className="mono tabular font-medium text-ink">
             {format(entry.value as number)}
           </span>
         </div>
       ))}
+      {payload.length > 1 && (
+        <div
+          className="mt-1.5 pt-1.5 border-t border-line-2 flex justify-between text-[11px] text-ink-2"
+        >
+          <span>Total</span>
+          <span className="mono tabular font-semibold">{formatTokens(total)}</span>
+        </div>
+      )}
     </div>
   );
 }

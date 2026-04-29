@@ -1,54 +1,39 @@
-/** Chart color constants — neon cyberpunk palette. */
+/**
+ * Chart color constants — muted oklch palette matching the redesign tokens.
+ * Colors are defined as CSS custom properties in index.css and auto-switch
+ * between light and dark. For Recharts (which needs concrete values in JS),
+ * we read them from getComputedStyle at render time.
+ */
 
-/** Dark mode: bright neon colors on dark backgrounds. */
-export const MODEL_COLORS_DARK = {
-  Opus: '#22d3ee',    // cyan-400
-  Sonnet: '#a855f7',  // purple-500
-  Haiku: '#d946ef',   // fuchsia-500
-} as const;
-
-/** Light mode: deeper shades for readability on white. */
-export const MODEL_COLORS_LIGHT = {
-  Opus: '#0891b2',    // cyan-600
-  Sonnet: '#7c3aed',  // violet-600
-  Haiku: '#c026d3',   // fuchsia-600
-} as const;
-
-/** Get model colors based on dark mode state. */
-export function getModelColors(isDark: boolean) {
-  return isDark ? MODEL_COLORS_DARK : MODEL_COLORS_LIGHT;
+/** Resolve a CSS custom property to its computed value. */
+function cssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-export const ACCENT_COLOR_DARK = '#22d3ee';  // cyan-400
-export const ACCENT_COLOR_LIGHT = '#0891b2'; // cyan-600
-
-export function getAccentColor(isDark: boolean) {
-  return isDark ? ACCENT_COLOR_DARK : ACCENT_COLOR_LIGHT;
+/** Get model colors as computed CSS values (works in both light/dark). */
+export function getModelColors(_isDark?: boolean): Record<string, string> {
+  return {
+    Opus: cssVar('--m-opus'),
+    Sonnet: cssVar('--m-sonnet'),
+    Haiku: cssVar('--m-haiku'),
+  };
 }
 
-/** Dark theme colors for chart elements. */
-export const DARK_THEME = {
-  grid: '#1e2540',
-  axis: '#7b8baa',
-  tooltipBg: '#141829',
-  tooltipBorder: '#252d4a',
-  tooltipText: '#e2e8f0',
-  cursor: 'rgba(123, 139, 170, 0.15)',
-} as const;
+/** Accent color from the current theme. */
+export function getAccentColor(_isDark?: boolean): string {
+  return cssVar('--accent');
+}
 
-/** Light theme colors for chart elements. */
-export const LIGHT_THEME = {
-  grid: '#e2e8f0',
-  axis: '#64748b',
-  tooltipBg: '#ffffff',
-  tooltipBorder: '#cbd5e1',
-  tooltipText: '#1e293b',
-  cursor: 'rgba(100, 116, 139, 0.1)',
-} as const;
-
-/** Get theme colors based on dark mode state. */
-export function getTheme(isDark: boolean) {
-  return isDark ? DARK_THEME : LIGHT_THEME;
+/** Theme colors for chart elements — derived from CSS custom properties. */
+export function getTheme(_isDark?: boolean) {
+  return {
+    grid: cssVar('--line-2'),
+    axis: cssVar('--ink-3'),
+    tooltipBg: cssVar('--surface'),
+    tooltipBorder: cssVar('--line'),
+    tooltipText: cssVar('--ink'),
+    cursor: cssVar('--line'),
+  };
 }
 
 /** Gradient definitions for area chart fills. */
