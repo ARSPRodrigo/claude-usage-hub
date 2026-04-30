@@ -142,11 +142,11 @@ interface CostComparisonResponse {
     modelId: string;
     displayName: string;
     provider: string;
+    tier: 'opus' | 'sonnet';
     inputCost: number;
     outputCost: number;
     cacheCost: number;
     totalCost: number;
-    isAnthropic: boolean;
   }>;
 }
 

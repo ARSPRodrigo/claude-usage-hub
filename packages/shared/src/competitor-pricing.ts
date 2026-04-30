@@ -1,7 +1,7 @@
 import type { ModelPricing } from './pricing.js';
 
 /**
- * A model from any provider, with its API pricing and caching support.
+ * Competitor models grouped by capability tier for fair comparison.
  *
  * Pricing last updated: 30 April 2026
  *
@@ -16,94 +16,74 @@ export interface CompetitorModel {
   id: string;
   displayName: string;
   provider: string;
+  tier: 'opus' | 'sonnet';
   pricing: ModelPricing;
   supportsCaching: boolean;
 }
 
 export const COMPETITOR_MODELS: CompetitorModel[] = [
-  // ── OpenAI ─────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // OPUS TIER — flagship reasoning, agentic coding
+  // Comparable to Claude Opus 4.7 ($5 in / $25 out)
+  // ═══════════════════════════════════════════════════════════
   {
     id: 'openai-gpt-5.5',
     displayName: 'GPT-5.5',
     provider: 'OpenAI',
+    tier: 'opus',
     pricing: { inputPerMillion: 5, outputPerMillion: 30, cacheWritePerMillion: 5, cacheReadPerMillion: 0.5 },
     supportsCaching: true,
   },
   {
-    id: 'openai-gpt-5.4',
-    displayName: 'GPT-5.4',
-    provider: 'OpenAI',
-    pricing: { inputPerMillion: 2.5, outputPerMillion: 15, cacheWritePerMillion: 2.5, cacheReadPerMillion: 0.25 },
-    supportsCaching: true,
-  },
-  {
-    id: 'openai-gpt-5.4-mini',
-    displayName: 'GPT-5.4 Mini',
-    provider: 'OpenAI',
-    pricing: { inputPerMillion: 0.75, outputPerMillion: 4.5, cacheWritePerMillion: 0.75, cacheReadPerMillion: 0.075 },
-    supportsCaching: true,
-  },
-  {
-    id: 'openai-gpt-5.4-nano',
-    displayName: 'GPT-5.4 Nano',
-    provider: 'OpenAI',
-    pricing: { inputPerMillion: 0.2, outputPerMillion: 1.25, cacheWritePerMillion: 0.2, cacheReadPerMillion: 0.02 },
-    supportsCaching: true,
-  },
-
-  // ── Google ─────────────────────────────────────────────────
-  {
     id: 'google-gemini-3.1-pro',
     displayName: 'Gemini 3.1 Pro',
     provider: 'Google',
+    tier: 'opus',
     pricing: { inputPerMillion: 2, outputPerMillion: 12, cacheWritePerMillion: 2, cacheReadPerMillion: 0.2 },
     supportsCaching: true,
   },
   {
-    id: 'google-gemini-3-flash',
-    displayName: 'Gemini 3 Flash',
-    provider: 'Google',
-    pricing: { inputPerMillion: 0.5, outputPerMillion: 3, cacheWritePerMillion: 0.5, cacheReadPerMillion: 0.05 },
-    supportsCaching: true,
-  },
-  {
-    id: 'google-gemini-2.5-pro',
-    displayName: 'Gemini 2.5 Pro',
-    provider: 'Google',
-    pricing: { inputPerMillion: 1.25, outputPerMillion: 10, cacheWritePerMillion: 1.25, cacheReadPerMillion: 0.125 },
-    supportsCaching: true,
-  },
-
-  // ── xAI ────────────────────────────────────────────────────
-  {
     id: 'xai-grok-4.20',
     displayName: 'Grok 4.20',
     provider: 'xAI',
+    tier: 'opus',
     pricing: { inputPerMillion: 2, outputPerMillion: 6, cacheWritePerMillion: 2, cacheReadPerMillion: 0.2 },
-    supportsCaching: true,
-  },
-
-  // ── DeepSeek ───────────────────────────────────────────────
-  {
-    id: 'deepseek-v4-flash',
-    displayName: 'DeepSeek V4 Flash',
-    provider: 'DeepSeek',
-    pricing: { inputPerMillion: 0.14, outputPerMillion: 0.28, cacheWritePerMillion: 0.14, cacheReadPerMillion: 0.0028 },
     supportsCaching: true,
   },
   {
     id: 'deepseek-v4-pro',
     displayName: 'DeepSeek V4 Pro',
     provider: 'DeepSeek',
+    tier: 'opus',
     pricing: { inputPerMillion: 1.74, outputPerMillion: 3.48, cacheWritePerMillion: 1.74, cacheReadPerMillion: 0.0145 },
     supportsCaching: true,
   },
 
-  // ── Mistral ────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // SONNET TIER — fast, capable daily-driver coding
+  // Comparable to Claude Sonnet 4.6 ($3 in / $15 out)
+  // ═══════════════════════════════════════════════════════════
+  {
+    id: 'openai-gpt-5.4',
+    displayName: 'GPT-5.4',
+    provider: 'OpenAI',
+    tier: 'sonnet',
+    pricing: { inputPerMillion: 2.5, outputPerMillion: 15, cacheWritePerMillion: 2.5, cacheReadPerMillion: 0.25 },
+    supportsCaching: true,
+  },
+  {
+    id: 'google-gemini-2.5-pro',
+    displayName: 'Gemini 2.5 Pro',
+    provider: 'Google',
+    tier: 'sonnet',
+    pricing: { inputPerMillion: 1.25, outputPerMillion: 10, cacheWritePerMillion: 1.25, cacheReadPerMillion: 0.125 },
+    supportsCaching: true,
+  },
   {
     id: 'mistral-large-3',
     displayName: 'Mistral Large 3',
     provider: 'Mistral',
+    tier: 'sonnet',
     pricing: { inputPerMillion: 0.5, outputPerMillion: 1.5, cacheWritePerMillion: 0, cacheReadPerMillion: 0 },
     supportsCaching: false,
   },
@@ -111,6 +91,7 @@ export const COMPETITOR_MODELS: CompetitorModel[] = [
     id: 'mistral-devstral-2',
     displayName: 'Devstral 2',
     provider: 'Mistral',
+    tier: 'sonnet',
     pricing: { inputPerMillion: 0.4, outputPerMillion: 2, cacheWritePerMillion: 0, cacheReadPerMillion: 0 },
     supportsCaching: false,
   },
@@ -121,11 +102,11 @@ export interface CostComparisonEntry {
   modelId: string;
   displayName: string;
   provider: string;
+  tier: 'opus' | 'sonnet';
   inputCost: number;
   outputCost: number;
   cacheCost: number;
   totalCost: number;
-  isAnthropic: boolean;
 }
 
 /** Provider brand colors for charts. */
@@ -174,11 +155,11 @@ export function computeComparisonCosts(tokens: {
       modelId: model.id,
       displayName: model.displayName,
       provider: model.provider,
+      tier: model.tier,
       inputCost,
       outputCost,
       cacheCost,
       totalCost,
-      isAnthropic: model.provider === 'Anthropic',
     };
   }).sort((a, b) => a.totalCost - b.totalCost);
 }
