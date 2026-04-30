@@ -113,7 +113,7 @@ export function AdminTeamPage() {
     <div>
       {/* Page header */}
       <div className="mb-6">
-        <div className="label mb-2">ORGANIZATION · /TEAM</div>
+        <div className="label mb-2">ORGANIZATION</div>
         <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Team</h1>
         <div className="text-ink-3 mt-2 text-sm">Invites, roles and API keys.</div>
       </div>

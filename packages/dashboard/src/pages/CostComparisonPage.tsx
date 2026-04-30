@@ -197,7 +197,7 @@ export function CostComparisonPage({ orgWide = false }: { orgWide?: boolean } = 
   const admin = useAdminCostComparison(range);
   const { data, isLoading, isError, refetch } = orgWide ? admin : personal;
 
-  const eyebrow = orgWide ? 'ORGANIZATION · /COST-COMPARISON' : 'ANALYTICS · /COST-COMPARISON';
+  const eyebrow = orgWide ? 'ORGANIZATION' : 'MY USAGE';
   const subtitle = orgWide
     ? "What your entire team's Claude usage would cost on other LLM APIs."
     : 'What your actual token usage would cost on other LLM APIs.';

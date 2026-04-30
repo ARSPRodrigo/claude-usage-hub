@@ -74,7 +74,7 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
       {/* Page header */}
       <div className="flex items-end justify-between mb-6 gap-5 flex-wrap">
         <div>
-          <div className="label mb-2">ORGANIZATION · /ADMIN</div>
+          <div className="label mb-2">ORGANIZATION</div>
           <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Team overview</h1>
           <div className="text-ink-3 mt-2 text-sm">
             How your organization is using Claude, by developer.

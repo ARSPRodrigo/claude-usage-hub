@@ -124,7 +124,7 @@ export function ProfilePage() {
     <div>
       {/* Page header */}
       <div className="mb-6">
-        <div className="label mb-2">ACCOUNT · /PROFILE</div>
+        <div className="label mb-2">ACCOUNT</div>
         <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Profile & keys</h1>
         <div className="text-ink-3 mt-2 text-sm">
           Your identity and the API keys your machines use to report usage.

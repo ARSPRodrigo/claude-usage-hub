@@ -92,7 +92,7 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
 
       {/* Navigation sections */}
       <div className="flex-1 overflow-y-auto px-3 pt-1">
-        <div className="label px-1.5 pt-3.5 pb-1.5">My Usage</div>
+        <div className="label px-1.5 pt-3.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>My Usage</div>
         <ul className="flex flex-col gap-0.5">
           <NavItem id="dashboard" label="Dashboard" icon={BarChart3} />
           <NavItem id="projects" label="Projects" icon={FolderOpen} />
@@ -102,7 +102,7 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
 
         {isAdmin && (
           <>
-            <div className="label px-1.5 pt-4.5 pb-1.5">Organization</div>
+            <div className="label px-1.5 pt-4.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>Organization</div>
             <ul className="flex flex-col gap-0.5">
               <NavItem id="admin-org" label="Overview" icon={Building2} extraActive="developer-detail" />
               <NavItem id="admin-team" label="Team" icon={Users} />

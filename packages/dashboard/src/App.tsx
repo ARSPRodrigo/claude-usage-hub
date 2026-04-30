@@ -147,9 +147,8 @@ export default function App() {
             backdropFilter: 'blur(8px)',
           }}
         >
-          <div className="mono text-[11px] text-ink-3" style={{ letterSpacing: '0.05em' }}>
-            ACME · DEV&nbsp;&nbsp;/&nbsp;&nbsp;
-            <span className="text-ink">{PAGE_LABELS[currentPage]}</span>
+          <div className="mono text-[11px] text-ink" style={{ letterSpacing: '0.05em' }}>
+            {PAGE_LABELS[currentPage]}
           </div>
 
           <div className="flex items-center gap-2">

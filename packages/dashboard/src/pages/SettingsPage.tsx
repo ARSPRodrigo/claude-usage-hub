@@ -67,7 +67,7 @@ export function SettingsPage() {
     <div>
       {/* Page header */}
       <div className="mb-6">
-        <div className="label mb-2">ORGANIZATION · /SETTINGS</div>
+        <div className="label mb-2">ORGANIZATION</div>
         <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Settings</h1>
         <div className="text-ink-3 mt-2 text-sm">Retention, auth and data policies.</div>
       </div>
