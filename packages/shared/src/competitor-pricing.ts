@@ -109,13 +109,13 @@ export interface CostComparisonEntry {
   totalCost: number;
 }
 
-/** Provider brand colors for charts. */
+/** Provider brand colors for charts (matches official branding). */
 export const PROVIDER_COLORS: Record<string, string> = {
-  OpenAI:    'oklch(0.55 0.12 160)',
-  Google:    'oklch(0.60 0.15 100)',
-  xAI:       'oklch(0.50 0.10 300)',
-  DeepSeek:  'oklch(0.55 0.14 30)',
-  Mistral:   'oklch(0.60 0.12 45)',
+  OpenAI:    '#10a37f',  // GPT green
+  Google:    '#4285f4',  // Google blue
+  xAI:       '#8b5cf6',  // neutral purple (monochrome brand)
+  DeepSeek:  '#4D6BFE',  // DeepSeek blue
+  Mistral:   '#FF8205',  // Mistral orange
 };
 
 /**

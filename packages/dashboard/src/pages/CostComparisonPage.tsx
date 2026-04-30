@@ -18,11 +18,11 @@ import { getTheme } from '@/lib/chart-theme';
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
 const PROVIDER_COLORS: Record<string, string> = {
-  OpenAI:    '#4a9a6a',
-  Google:    '#b89a30',
-  xAI:       '#7a5aad',
-  DeepSeek:  '#c06a3a',
-  Mistral:   '#c08a30',
+  OpenAI:    '#10a37f',  // GPT green
+  Google:    '#4285f4',  // Google blue
+  xAI:       '#8b5cf6',  // neutral purple
+  DeepSeek:  '#4D6BFE',  // DeepSeek blue
+  Mistral:   '#FF8205',  // Mistral orange
 };
 
 function getProviderColor(provider: string): string {
