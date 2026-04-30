@@ -18,7 +18,6 @@ import { getTheme } from '@/lib/chart-theme';
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
 const PROVIDER_COLORS: Record<string, string> = {
-  Anthropic: '#4a6fa5',
   OpenAI:    '#4a9a6a',
   Google:    '#b89a30',
   xAI:       '#7a5aad',
@@ -195,7 +194,7 @@ export function CostComparisonPage() {
           <div className="px-5 py-4 border-b border-line-2">
             <div className="label">Detailed breakdown</div>
             <div className="text-[15.5px] font-medium mt-1.5" style={{ letterSpacing: '-0.01em' }}>
-              All 15 models ranked by total cost
+              All models ranked by total cost
             </div>
           </div>
           <table className="w-full text-[13px]">
@@ -270,6 +269,9 @@ function PageHeader({ range, setRange }: { range: TimeRange; setRange: (r: TimeR
         </h1>
         <div className="text-ink-3 mt-2 text-sm">
           What your actual token usage would cost on other LLM APIs.
+        </div>
+        <div className="mono text-ink-4 mt-1" style={{ fontSize: '10.5px', letterSpacing: '0.04em' }}>
+          PRICING UPDATED 30 APR 2026
         </div>
       </div>
       <TimeRangeSelector value={range} onChange={setRange} />

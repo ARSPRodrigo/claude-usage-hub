@@ -3,8 +3,9 @@ import type { ModelPricing } from './pricing.js';
 /**
  * A model from any provider, with its API pricing and caching support.
  *
- * Pricing sources (verified April 2026):
- *   - Anthropic: platform.claude.com/docs/en/about-claude/pricing
+ * Pricing last updated: 30 April 2026
+ *
+ * Sources:
  *   - OpenAI:    developers.openai.com/api/docs/pricing
  *   - Google:    ai.google.dev/gemini-api/docs/pricing
  *   - xAI:       docs.x.ai/developers/models
@@ -20,29 +21,6 @@ export interface CompetitorModel {
 }
 
 export const COMPETITOR_MODELS: CompetitorModel[] = [
-  // ── Anthropic ──────────────────────────────────────────────
-  {
-    id: 'anthropic-opus-4.7',
-    displayName: 'Claude Opus 4.7',
-    provider: 'Anthropic',
-    pricing: { inputPerMillion: 5, outputPerMillion: 25, cacheWritePerMillion: 10, cacheReadPerMillion: 0.5 },
-    supportsCaching: true,
-  },
-  {
-    id: 'anthropic-sonnet-4.6',
-    displayName: 'Claude Sonnet 4.6',
-    provider: 'Anthropic',
-    pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheWritePerMillion: 6, cacheReadPerMillion: 0.3 },
-    supportsCaching: true,
-  },
-  {
-    id: 'anthropic-haiku-4.5',
-    displayName: 'Claude Haiku 4.5',
-    provider: 'Anthropic',
-    pricing: { inputPerMillion: 1, outputPerMillion: 5, cacheWritePerMillion: 2, cacheReadPerMillion: 0.1 },
-    supportsCaching: true,
-  },
-
   // ── OpenAI ─────────────────────────────────────────────────
   {
     id: 'openai-gpt-5.5',
@@ -117,7 +95,7 @@ export const COMPETITOR_MODELS: CompetitorModel[] = [
     id: 'deepseek-v4-pro',
     displayName: 'DeepSeek V4 Pro',
     provider: 'DeepSeek',
-    pricing: { inputPerMillion: 0.435, outputPerMillion: 0.87, cacheWritePerMillion: 0.435, cacheReadPerMillion: 0.003625 },
+    pricing: { inputPerMillion: 1.74, outputPerMillion: 3.48, cacheWritePerMillion: 1.74, cacheReadPerMillion: 0.0145 },
     supportsCaching: true,
   },
 
@@ -152,7 +130,6 @@ export interface CostComparisonEntry {
 
 /** Provider brand colors for charts. */
 export const PROVIDER_COLORS: Record<string, string> = {
-  Anthropic: 'oklch(0.55 0.14 220)',
   OpenAI:    'oklch(0.55 0.12 160)',
   Google:    'oklch(0.60 0.15 100)',
   xAI:       'oklch(0.50 0.10 300)',
