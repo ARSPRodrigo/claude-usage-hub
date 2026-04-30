@@ -22,6 +22,7 @@ import { invitationRoutes } from './invitations.js';
 import { getDeveloperStats, getDashboardStats, getTokenTimeseries, getAggregateTokensByTier } from '../db/repository.js';
 import { requireAdmin, requirePrimaryOwner } from '../middleware/auth.js';
 
+const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
 const admin = new Hono<AppEnv>();
 
 /** POST /api/v1/admin/developers — create a developer account. */
@@ -176,7 +177,9 @@ admin.route('/invitations', invitationRoutes);
 
 /** GET /api/v1/admin/stats/developers — per-member usage breakdown */
 admin.get('/stats/developers', (c) => {
-  return c.json(getDeveloperStats());
+  const rangeParam = c.req.query('range') ?? 'all';
+  const range: TimeRange = VALID_RANGES.has(rangeParam) ? (rangeParam as TimeRange) : 'all';
+  return c.json(getDeveloperStats(range));
 });
 
 /** GET /api/v1/admin/stats/overview — org-wide totals */
@@ -255,7 +258,6 @@ admin.delete('/api-keys/:id/data', requireAdmin, (c) => {
 });
 
 /** GET /api/v1/admin/cost-comparison — org-wide cost comparison (no developer scoping). */
-const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
 admin.get('/cost-comparison', (c) => {
   const rangeParam = c.req.query('range') ?? '24h';
   const range: TimeRange = VALID_RANGES.has(rangeParam) ? (rangeParam as TimeRange) : '24h';

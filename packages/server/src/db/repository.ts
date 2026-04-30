@@ -644,8 +644,12 @@ export interface DeveloperStatRow {
 /**
  * Per-member usage breakdown — admin only. Includes all roles.
  */
-export function getDeveloperStats(): DeveloperStatRow[] {
+export function getDeveloperStats(range?: TimeRange): DeveloperStatRow[] {
   const raw = getRawDb();
+  const cutoff = range ? cutoffTime(range) : null;
+  const timeFilter = cutoff ? 'AND e.timestamp >= ?' : '';
+  const params = cutoff ? [cutoff] : [];
+
   return raw.prepare(`
     SELECT
       u.developer_id   AS developerId,
@@ -657,8 +661,8 @@ export function getDeveloperStats(): DeveloperStatRow[] {
       COUNT(e.id)                   AS entryCount,
       MAX(e.timestamp)              AS lastSeen
     FROM users u
-    LEFT JOIN usage_entries e ON e.developer_id = u.developer_id
+    LEFT JOIN usage_entries e ON e.developer_id = u.developer_id ${timeFilter}
     GROUP BY u.id
     ORDER BY costUsd DESC
-  `).all() as DeveloperStatRow[];
+  `).all(...params) as DeveloperStatRow[];
 }
