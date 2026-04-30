@@ -20,7 +20,7 @@ import {
   getProjectDetail,
   getEntryCount,
   getLastEntryTimestamp,
-  getAggregateTokens,
+  getAggregateTokensByTier,
 } from '../db/repository.js';
 import { computeComparisonCosts } from '@claude-usage-hub/shared';
 import { ingestPayload } from '../services/ingest.js';
@@ -126,26 +126,48 @@ api.get('/dashboard/cost-breakdown', (c) => {
   return c.json(getCostBreakdown(range, getDeveloperScope(c)));
 });
 
-// Cost comparison — reprice actual usage against 15 LLM models
+// Cost comparison — reprice actual usage against competitor LLM models, split by tier
 api.get('/dashboard/cost-comparison', (c) => {
   const range = parseRange(c);
-  const agg = getAggregateTokens(range, getDeveloperScope(c));
-  const comparisons = computeComparisonCosts({
-    inputTokens: agg.inputTokens,
-    outputTokens: agg.outputTokens,
-    cacheCreationTokens: agg.cacheCreationTokens,
-    cacheReadTokens: agg.cacheReadTokens,
-  });
+  const tiers = getAggregateTokensByTier(range, getDeveloperScope(c));
+
+  const opusComparisons = computeComparisonCosts({
+    inputTokens: tiers.opus.inputTokens,
+    outputTokens: tiers.opus.outputTokens,
+    cacheCreationTokens: tiers.opus.cacheCreationTokens,
+    cacheReadTokens: tiers.opus.cacheReadTokens,
+  }).filter((c) => c.tier === 'opus');
+
+  const sonnetComparisons = computeComparisonCosts({
+    inputTokens: tiers.sonnet.inputTokens,
+    outputTokens: tiers.sonnet.outputTokens,
+    cacheCreationTokens: tiers.sonnet.cacheCreationTokens,
+    cacheReadTokens: tiers.sonnet.cacheReadTokens,
+  }).filter((c) => c.tier === 'sonnet');
+
   return c.json({
-    tokens: {
-      inputTokens: agg.inputTokens,
-      outputTokens: agg.outputTokens,
-      cacheCreationTokens: agg.cacheCreationTokens,
-      cacheReadTokens: agg.cacheReadTokens,
-      totalTokens: agg.inputTokens + agg.outputTokens + agg.cacheCreationTokens + agg.cacheReadTokens,
+    opus: {
+      tokens: {
+        inputTokens: tiers.opus.inputTokens,
+        outputTokens: tiers.opus.outputTokens,
+        cacheCreationTokens: tiers.opus.cacheCreationTokens,
+        cacheReadTokens: tiers.opus.cacheReadTokens,
+        totalTokens: tiers.opus.inputTokens + tiers.opus.outputTokens + tiers.opus.cacheCreationTokens + tiers.opus.cacheReadTokens,
+      },
+      actualCost: tiers.opus.actualCost,
+      comparisons: opusComparisons,
     },
-    actualCost: agg.actualCost,
-    comparisons,
+    sonnet: {
+      tokens: {
+        inputTokens: tiers.sonnet.inputTokens,
+        outputTokens: tiers.sonnet.outputTokens,
+        cacheCreationTokens: tiers.sonnet.cacheCreationTokens,
+        cacheReadTokens: tiers.sonnet.cacheReadTokens,
+        totalTokens: tiers.sonnet.inputTokens + tiers.sonnet.outputTokens + tiers.sonnet.cacheCreationTokens + tiers.sonnet.cacheReadTokens,
+      },
+      actualCost: tiers.sonnet.actualCost,
+      comparisons: sonnetComparisons,
+    },
   });
 });
 

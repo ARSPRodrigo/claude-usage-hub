@@ -206,60 +206,54 @@ export function CostComparisonPage() {
     );
   }
 
-  const comparisons = (data?.comparisons ?? []) as ComparisonEntry[];
-  const tokens = data?.tokens;
-  const actualCost = data?.actualCost ?? 0;
+  const opus = data?.opus;
+  const sonnet = data?.sonnet;
 
-  const opusModels = comparisons.filter((c) => c.tier === 'opus');
-  const sonnetModels = comparisons.filter((c) => c.tier === 'sonnet');
+  const opusModels = (opus?.comparisons ?? []) as ComparisonEntry[];
+  const sonnetModels = (sonnet?.comparisons ?? []) as ComparisonEntry[];
 
-  // Rough split: assume Opus-class models account for ~60% of cost (output-heavy)
-  // In practice the actual cost is a blend, but this gives a useful reference
-  const opusCostRef = actualCost;
-  const sonnetCostRef = actualCost;
+  const opusCost = opus?.actualCost ?? 0;
+  const sonnetCost = sonnet?.actualCost ?? 0;
+  const totalActualCost = opusCost + sonnetCost;
 
   return (
     <div>
       <PageHeader range={range} setRange={setRange} />
 
-      {/* Token summary strip */}
-      {tokens && (
-        <div
-          className="grid gap-0 border border-line rounded-card bg-surface overflow-hidden mb-5"
-          style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}
-        >
-          {[
-            { label: 'Input Tokens', value: formatTokens(tokens.inputTokens) },
-            { label: 'Output Tokens', value: formatTokens(tokens.outputTokens) },
-            { label: 'Cache Write', value: formatTokens(tokens.cacheCreationTokens) },
-            { label: 'Cache Read', value: formatTokens(tokens.cacheReadTokens) },
-            { label: 'Your Actual Cost', value: formatCost(actualCost), highlight: true },
-          ].map((s, i) => (
-            <div
-              key={i}
-              style={{
-                padding: '18px 20px',
-                borderRight: i < 4 ? '1px solid var(--line)' : 'none',
-                background: s.highlight ? 'color-mix(in oklch, var(--accent) 6%, transparent)' : undefined,
-              }}
-            >
-              <div className="label mb-2">{s.label}</div>
-              <div className="mono tabular" style={{ fontSize: s.highlight ? 28 : 24, fontWeight: 500, letterSpacing: '-0.02em' }}>
-                {isLoading ? <span className="inline-block w-16 h-6 rounded bg-line-2 animate-pulse" /> : s.value}
-              </div>
+      {/* Cost summary strip */}
+      <div
+        className="grid gap-0 border border-line rounded-card bg-surface overflow-hidden mb-5"
+        style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
+      >
+        {[
+          { label: 'Opus Usage Cost', value: formatCost(opusCost) },
+          { label: 'Sonnet / Haiku Usage Cost', value: formatCost(sonnetCost) },
+          { label: 'Total Actual Cost', value: formatCost(totalActualCost), highlight: true },
+        ].map((s, i) => (
+          <div
+            key={i}
+            style={{
+              padding: '18px 20px',
+              borderRight: i < 2 ? '1px solid var(--line)' : 'none',
+              background: s.highlight ? 'color-mix(in oklch, var(--accent) 6%, transparent)' : undefined,
+            }}
+          >
+            <div className="label mb-2">{s.label}</div>
+            <div className="mono tabular" style={{ fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>
+              {isLoading ? <span className="inline-block w-16 h-6 rounded bg-line-2 animate-pulse" /> : s.value}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
 
       {/* Opus tier */}
       <TierSection
         title="OPUS-CLASS · FLAGSHIP REASONING"
-        subtitle="Comparable to Claude Opus 4.7"
+        subtitle="Comparable to Claude Opus 4.6 / 4.7"
         anthropicLabel="Opus"
-        anthropicCost={opusCostRef}
+        anthropicCost={opusCost}
         models={opusModels}
-        actualCost={actualCost}
+        actualCost={opusCost}
       />
 
       {/* Sonnet tier */}
@@ -267,12 +261,12 @@ export function CostComparisonPage() {
         title="SONNET-CLASS · DAILY-DRIVER CODING"
         subtitle="Comparable to Claude Sonnet 4.6"
         anthropicLabel="Sonnet"
-        anthropicCost={sonnetCostRef}
+        anthropicCost={sonnetCost}
         models={sonnetModels}
-        actualCost={actualCost}
+        actualCost={sonnetCost}
       />
 
-      {!isLoading && comparisons.length === 0 && (
+      {!isLoading && opusModels.length === 0 && sonnetModels.length === 0 && (
         <div className="rounded-card border border-line bg-surface p-12 text-center text-ink-3 text-sm">
           No usage data for this time range
         </div>

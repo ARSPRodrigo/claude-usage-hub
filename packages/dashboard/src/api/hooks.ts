@@ -129,7 +129,7 @@ export function useCostBreakdown(range: TimeRange) {
   });
 }
 
-interface CostComparisonResponse {
+interface TierData {
   tokens: {
     inputTokens: number;
     outputTokens: number;
@@ -148,6 +148,11 @@ interface CostComparisonResponse {
     cacheCost: number;
     totalCost: number;
   }>;
+}
+
+interface CostComparisonResponse {
+  opus: TierData;
+  sonnet: TierData;
 }
 
 export function useCostComparison(range: TimeRange) {
