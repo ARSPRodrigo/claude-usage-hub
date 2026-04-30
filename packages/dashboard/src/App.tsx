@@ -17,7 +17,7 @@ import { CostComparisonPage } from '@/pages/CostComparisonPage';
 import { getToken, getUser } from '@/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 
-export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'settings' | 'developer-detail' | 'help';
+export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'settings' | 'developer-detail' | 'help';
 
 const PAGE_LABELS: Record<InnerPage, string> = {
   dashboard: 'DASHBOARD',
@@ -28,6 +28,7 @@ const PAGE_LABELS: Record<InnerPage, string> = {
   'admin-team': 'TEAM',
   settings: 'SETTINGS',
   'cost-comparison': 'COST COMPARISON',
+  'admin-cost-comparison': 'COST COMPARISON',
   'developer-detail': 'DEVELOPER',
   help: 'HELP',
 };
@@ -43,6 +44,7 @@ function pathnameToPage(pathname: string): InnerPage | null {
   if (pathname === '/sessions') return 'sessions';
   if (pathname === '/projects') return 'projects';
   if (pathname === '/cost-comparison') return 'cost-comparison';
+  if (pathname === '/admin/cost-comparison') return 'admin-cost-comparison';
   if (pathname === '/admin/org') return 'admin-org';
   if (pathname === '/admin/team') return 'admin-team';
   if (pathname === '/admin/settings') return 'settings';
@@ -102,6 +104,7 @@ export default function App() {
     sessions: '/sessions',
     projects: '/projects',
     'cost-comparison': '/cost-comparison',
+    'admin-cost-comparison': '/admin/cost-comparison',
     profile: '/profile',
     'admin-org': '/admin/org',
     'admin-team': '/admin/team',
@@ -173,6 +176,7 @@ export default function App() {
           {currentPage === 'sessions' && <SessionsPage />}
           {currentPage === 'projects' && <ProjectsPage />}
           {currentPage === 'cost-comparison' && <CostComparisonPage />}
+          {currentPage === 'admin-cost-comparison' && <CostComparisonPage orgWide />}
           {currentPage === 'profile' && <ProfilePage />}
           {currentPage === 'admin-org' && (
             <AdminOrgPage onSelectDeveloper={handleSelectDeveloper} />

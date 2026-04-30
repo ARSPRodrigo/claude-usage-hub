@@ -126,10 +126,12 @@ api.get('/dashboard/cost-breakdown', (c) => {
   return c.json(getCostBreakdown(range, getDeveloperScope(c)));
 });
 
-// Cost comparison — reprice actual usage against competitor LLM models, split by tier
+// Cost comparison (personal) — always scoped to caller's developerId, even for admins
 api.get('/dashboard/cost-comparison', (c) => {
   const range = parseRange(c);
-  const tiers = getAggregateTokensByTier(range, getDeveloperScope(c));
+  const auth = c.get('auth') as AuthContext | undefined;
+  const personalScope = auth?.developerId; // always personal, not org-wide
+  const tiers = getAggregateTokensByTier(range, personalScope);
 
   const opusComparisons = computeComparisonCosts({
     inputTokens: tiers.opus.inputTokens,

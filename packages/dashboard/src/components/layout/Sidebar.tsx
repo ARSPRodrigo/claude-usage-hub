@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
 import { getUser, clearAuth } from '@/api/client';
 
-type Page = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'settings' | 'developer-detail' | 'help';
+type Page = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'settings' | 'developer-detail' | 'help';
 
 interface SidebarProps {
   activePage: Page;
@@ -106,6 +106,7 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
             <ul className="flex flex-col gap-0.5">
               <NavItem id="admin-org" label="Overview" icon={Building2} extraActive="developer-detail" />
               <NavItem id="admin-team" label="Team" icon={Users} />
+              <NavItem id="admin-cost-comparison" label="Cost Comparison" icon={Scale} />
             </ul>
           </>
         )}

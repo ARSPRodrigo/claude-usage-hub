@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { ApiError } from '@/components/ApiError';
-import { useCostComparison } from '@/api/hooks';
+import { useCostComparison, useAdminCostComparison } from '@/api/hooks';
 import { formatTokens, formatCost } from '@/lib/utils';
 import { getTheme } from '@/lib/chart-theme';
 
@@ -191,14 +191,21 @@ function TierSection({
   );
 }
 
-export function CostComparisonPage() {
+export function CostComparisonPage({ orgWide = false }: { orgWide?: boolean } = {}) {
   const [range, setRange] = useState<TimeRange>('7d');
-  const { data, isLoading, isError, refetch } = useCostComparison(range);
+  const personal = useCostComparison(range);
+  const admin = useAdminCostComparison(range);
+  const { data, isLoading, isError, refetch } = orgWide ? admin : personal;
+
+  const eyebrow = orgWide ? 'ORGANIZATION · /COST-COMPARISON' : 'ANALYTICS · /COST-COMPARISON';
+  const subtitle = orgWide
+    ? "What your entire team's Claude usage would cost on other LLM APIs."
+    : 'What your actual token usage would cost on other LLM APIs.';
 
   if (isError) {
     return (
       <div>
-        <PageHeader range={range} setRange={setRange} />
+        <PageHeader range={range} setRange={setRange} eyebrow={eyebrow} subtitle={subtitle} />
         <div className="rounded-card border border-line bg-surface p-5">
           <ApiError message="Could not load cost comparison data." onRetry={() => refetch()} />
         </div>
@@ -218,7 +225,7 @@ export function CostComparisonPage() {
 
   return (
     <div>
-      <PageHeader range={range} setRange={setRange} />
+      <PageHeader range={range} setRange={setRange} eyebrow={eyebrow} subtitle={subtitle} />
 
       {/* Cost summary strip */}
       <div
@@ -275,16 +282,16 @@ export function CostComparisonPage() {
   );
 }
 
-function PageHeader({ range, setRange }: { range: TimeRange; setRange: (r: TimeRange) => void }) {
+function PageHeader({ range, setRange, eyebrow, subtitle }: { range: TimeRange; setRange: (r: TimeRange) => void; eyebrow: string; subtitle: string }) {
   return (
     <div className="flex items-end justify-between mb-6 gap-5 flex-wrap">
       <div>
-        <div className="label mb-2">ANALYTICS · /COST-COMPARISON</div>
+        <div className="label mb-2">{eyebrow}</div>
         <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>
           Cost comparison
         </h1>
         <div className="text-ink-3 mt-2 text-sm">
-          What your actual token usage would cost on other LLM APIs.
+          {subtitle}
         </div>
         <div className="mono text-ink-4 mt-1" style={{ fontSize: '10.5px', letterSpacing: '0.04em' }}>
           PRICING UPDATED 30 APR 2026

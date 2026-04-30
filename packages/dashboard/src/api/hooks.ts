@@ -163,6 +163,14 @@ export function useCostComparison(range: TimeRange) {
   });
 }
 
+export function useAdminCostComparison(range: TimeRange) {
+  return useQuery({
+    queryKey: ['admin-cost-comparison', range],
+    queryFn: () => apiGet<CostComparisonResponse>('/api/v1/admin/cost-comparison', { range }),
+    refetchInterval: 60_000,
+  });
+}
+
 export function useProjects(range: TimeRange) {
   return useQuery({
     queryKey: ['projects', range],

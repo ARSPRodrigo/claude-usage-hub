@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { createApiKeySchema, createDeveloperSchema } from '@claude-usage-hub/shared';
+import { createApiKeySchema, createDeveloperSchema, computeComparisonCosts } from '@claude-usage-hub/shared';
 import type { AppEnv } from '../env.js';
-import type { AuthContext } from '@claude-usage-hub/shared';
+import type { AuthContext, TimeRange } from '@claude-usage-hub/shared';
 import {
   createUser,
   listUsers,
@@ -19,7 +19,7 @@ import {
 } from '../db/auth-repository.js';
 import { hashPassword, generateApiKey } from '../services/auth-utils.js';
 import { invitationRoutes } from './invitations.js';
-import { getDeveloperStats, getDashboardStats, getTokenTimeseries } from '../db/repository.js';
+import { getDeveloperStats, getDashboardStats, getTokenTimeseries, getAggregateTokensByTier } from '../db/repository.js';
 import { requireAdmin, requirePrimaryOwner } from '../middleware/auth.js';
 
 const admin = new Hono<AppEnv>();
@@ -252,6 +252,53 @@ admin.delete('/api-keys/:id/data', requireAdmin, (c) => {
   const id = c.req.param('id') as string;
   const deletedCount = deleteUsageEntriesForApiKey(id);
   return c.json({ ok: true, deletedCount });
+});
+
+/** GET /api/v1/admin/cost-comparison — org-wide cost comparison (no developer scoping). */
+const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
+admin.get('/cost-comparison', (c) => {
+  const rangeParam = c.req.query('range') ?? '24h';
+  const range: TimeRange = VALID_RANGES.has(rangeParam) ? (rangeParam as TimeRange) : '24h';
+  const tiers = getAggregateTokensByTier(range); // no developerId = org-wide
+
+  const opusComparisons = computeComparisonCosts({
+    inputTokens: tiers.opus.inputTokens,
+    outputTokens: tiers.opus.outputTokens,
+    cacheCreationTokens: tiers.opus.cacheCreationTokens,
+    cacheReadTokens: tiers.opus.cacheReadTokens,
+  }).filter((entry) => entry.tier === 'opus');
+
+  const sonnetComparisons = computeComparisonCosts({
+    inputTokens: tiers.sonnet.inputTokens,
+    outputTokens: tiers.sonnet.outputTokens,
+    cacheCreationTokens: tiers.sonnet.cacheCreationTokens,
+    cacheReadTokens: tiers.sonnet.cacheReadTokens,
+  }).filter((entry) => entry.tier === 'sonnet');
+
+  return c.json({
+    opus: {
+      tokens: {
+        inputTokens: tiers.opus.inputTokens,
+        outputTokens: tiers.opus.outputTokens,
+        cacheCreationTokens: tiers.opus.cacheCreationTokens,
+        cacheReadTokens: tiers.opus.cacheReadTokens,
+        totalTokens: tiers.opus.inputTokens + tiers.opus.outputTokens + tiers.opus.cacheCreationTokens + tiers.opus.cacheReadTokens,
+      },
+      actualCost: tiers.opus.actualCost,
+      comparisons: opusComparisons,
+    },
+    sonnet: {
+      tokens: {
+        inputTokens: tiers.sonnet.inputTokens,
+        outputTokens: tiers.sonnet.outputTokens,
+        cacheCreationTokens: tiers.sonnet.cacheCreationTokens,
+        cacheReadTokens: tiers.sonnet.cacheReadTokens,
+        totalTokens: tiers.sonnet.inputTokens + tiers.sonnet.outputTokens + tiers.sonnet.cacheCreationTokens + tiers.sonnet.cacheReadTokens,
+      },
+      actualCost: tiers.sonnet.actualCost,
+      comparisons: sonnetComparisons,
+    },
+  });
 });
 
 export { admin as adminRoutes };
