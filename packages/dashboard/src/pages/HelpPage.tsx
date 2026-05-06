@@ -102,7 +102,7 @@ export function HelpPage() {
       {/* Page header */}
       <div className="flex items-end justify-between mb-6 gap-5 flex-wrap">
         <div>
-          <div className="label mb-2">ACCOUNT · /HELP</div>
+          <div className="label mb-2">ACCOUNT</div>
           <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Help & docs</h1>
           <div className="text-ink-3 mt-2 text-sm">
             Self-hosted, open source, privacy-first token tracking for Claude Code.

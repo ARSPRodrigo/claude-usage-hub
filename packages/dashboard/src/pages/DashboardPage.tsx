@@ -80,7 +80,7 @@ function PageHeader({ range, setRange }: { range: TimeRange; setRange: (r: TimeR
   return (
     <div className="flex items-end justify-between mb-6 gap-5 flex-wrap">
       <div>
-        <div className="label mb-2">OVERVIEW · /</div>
+        <div className="label mb-2">MY USAGE</div>
         <h1
           className="text-title m-0"
           style={{ fontSize: 36, lineHeight: 1.05 }}

@@ -1,5 +1,5 @@
 import {
-  BarChart3, FolderOpen, Clock, Building2, Users,
+  BarChart3, FolderOpen, Clock, Scale, Building2, Users,
   ChevronUp, User, Settings, LogOut,
   Gauge, HelpCircle,
 } from 'lucide-react';
@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
 import { getUser, clearAuth } from '@/api/client';
 
-type Page = 'dashboard' | 'sessions' | 'projects' | 'profile' | 'admin-org' | 'admin-team' | 'settings' | 'developer-detail' | 'help';
+type Page = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'settings' | 'developer-detail' | 'help';
 
 interface SidebarProps {
   activePage: Page;
@@ -92,19 +92,21 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
 
       {/* Navigation sections */}
       <div className="flex-1 overflow-y-auto px-3 pt-1">
-        <div className="label px-1.5 pt-3.5 pb-1.5">My Usage</div>
+        <div className="label px-1.5 pt-3.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>My Usage</div>
         <ul className="flex flex-col gap-0.5">
           <NavItem id="dashboard" label="Dashboard" icon={BarChart3} />
           <NavItem id="projects" label="Projects" icon={FolderOpen} />
           <NavItem id="sessions" label="Sessions" icon={Clock} />
+          <NavItem id="cost-comparison" label="Cost Comparison" icon={Scale} />
         </ul>
 
         {isAdmin && (
           <>
-            <div className="label px-1.5 pt-4.5 pb-1.5">Organization</div>
+            <div className="label px-1.5 pt-4.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>Organization</div>
             <ul className="flex flex-col gap-0.5">
               <NavItem id="admin-org" label="Overview" icon={Building2} extraActive="developer-detail" />
               <NavItem id="admin-team" label="Team" icon={Users} />
+              <NavItem id="admin-cost-comparison" label="Cost Comparison" icon={Scale} />
             </ul>
           </>
         )}

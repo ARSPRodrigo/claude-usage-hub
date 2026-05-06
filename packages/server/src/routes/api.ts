@@ -20,7 +20,9 @@ import {
   getProjectDetail,
   getEntryCount,
   getLastEntryTimestamp,
+  getAggregateTokensByTier,
 } from '../db/repository.js';
+import { computeComparisonCosts } from '@claude-usage-hub/shared';
 import { ingestPayload } from '../services/ingest.js';
 
 const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
@@ -122,6 +124,53 @@ api.get('/dashboard/model-mix', (c) => {
 api.get('/dashboard/cost-breakdown', (c) => {
   const range = parseRange(c);
   return c.json(getCostBreakdown(range, getDeveloperScope(c)));
+});
+
+// Cost comparison (personal) — always scoped to caller's developerId, even for admins
+api.get('/dashboard/cost-comparison', (c) => {
+  const range = parseRange(c);
+  const auth = c.get('auth') as AuthContext | undefined;
+  const personalScope = auth?.developerId; // always personal, not org-wide
+  const tiers = getAggregateTokensByTier(range, personalScope);
+
+  const opusComparisons = computeComparisonCosts({
+    inputTokens: tiers.opus.inputTokens,
+    outputTokens: tiers.opus.outputTokens,
+    cacheCreationTokens: tiers.opus.cacheCreationTokens,
+    cacheReadTokens: tiers.opus.cacheReadTokens,
+  }).filter((c) => c.tier === 'opus');
+
+  const sonnetComparisons = computeComparisonCosts({
+    inputTokens: tiers.sonnet.inputTokens,
+    outputTokens: tiers.sonnet.outputTokens,
+    cacheCreationTokens: tiers.sonnet.cacheCreationTokens,
+    cacheReadTokens: tiers.sonnet.cacheReadTokens,
+  }).filter((c) => c.tier === 'sonnet');
+
+  return c.json({
+    opus: {
+      tokens: {
+        inputTokens: tiers.opus.inputTokens,
+        outputTokens: tiers.opus.outputTokens,
+        cacheCreationTokens: tiers.opus.cacheCreationTokens,
+        cacheReadTokens: tiers.opus.cacheReadTokens,
+        totalTokens: tiers.opus.inputTokens + tiers.opus.outputTokens + tiers.opus.cacheCreationTokens + tiers.opus.cacheReadTokens,
+      },
+      actualCost: tiers.opus.actualCost,
+      comparisons: opusComparisons,
+    },
+    sonnet: {
+      tokens: {
+        inputTokens: tiers.sonnet.inputTokens,
+        outputTokens: tiers.sonnet.outputTokens,
+        cacheCreationTokens: tiers.sonnet.cacheCreationTokens,
+        cacheReadTokens: tiers.sonnet.cacheReadTokens,
+        totalTokens: tiers.sonnet.inputTokens + tiers.sonnet.outputTokens + tiers.sonnet.cacheCreationTokens + tiers.sonnet.cacheReadTokens,
+      },
+      actualCost: tiers.sonnet.actualCost,
+      comparisons: sonnetComparisons,
+    },
+  });
 });
 
 // Sessions

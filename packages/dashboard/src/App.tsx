@@ -13,10 +13,11 @@ import { AdminTeamPage } from '@/pages/AdminTeamPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { DeveloperDetailPage } from '@/pages/DeveloperDetailPage';
 import { HelpPage } from '@/pages/HelpPage';
+import { CostComparisonPage } from '@/pages/CostComparisonPage';
 import { getToken, getUser } from '@/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 
-export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'profile' | 'admin-org' | 'admin-team' | 'settings' | 'developer-detail' | 'help';
+export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'settings' | 'developer-detail' | 'help';
 
 const PAGE_LABELS: Record<InnerPage, string> = {
   dashboard: 'DASHBOARD',
@@ -26,6 +27,8 @@ const PAGE_LABELS: Record<InnerPage, string> = {
   'admin-org': 'OVERVIEW',
   'admin-team': 'TEAM',
   settings: 'SETTINGS',
+  'cost-comparison': 'COST COMPARISON',
+  'admin-cost-comparison': 'COST COMPARISON',
   'developer-detail': 'DEVELOPER',
   help: 'HELP',
 };
@@ -40,6 +43,8 @@ function pathnameToPage(pathname: string): InnerPage | null {
   if (pathname === '/profile') return 'profile';
   if (pathname === '/sessions') return 'sessions';
   if (pathname === '/projects') return 'projects';
+  if (pathname === '/cost-comparison') return 'cost-comparison';
+  if (pathname === '/admin/cost-comparison') return 'admin-cost-comparison';
   if (pathname === '/admin/org') return 'admin-org';
   if (pathname === '/admin/team') return 'admin-team';
   if (pathname === '/admin/settings') return 'settings';
@@ -98,6 +103,8 @@ export default function App() {
     dashboard: '/',
     sessions: '/sessions',
     projects: '/projects',
+    'cost-comparison': '/cost-comparison',
+    'admin-cost-comparison': '/admin/cost-comparison',
     profile: '/profile',
     'admin-org': '/admin/org',
     'admin-team': '/admin/team',
@@ -140,9 +147,8 @@ export default function App() {
             backdropFilter: 'blur(8px)',
           }}
         >
-          <div className="mono text-[11px] text-ink-3" style={{ letterSpacing: '0.05em' }}>
-            ACME · DEV&nbsp;&nbsp;/&nbsp;&nbsp;
-            <span className="text-ink">{PAGE_LABELS[currentPage]}</span>
+          <div className="mono text-[11px] text-ink" style={{ letterSpacing: '0.05em' }}>
+            {PAGE_LABELS[currentPage]}
           </div>
 
           <div className="flex items-center gap-2">
@@ -168,6 +174,8 @@ export default function App() {
           {currentPage === 'dashboard' && <DashboardPage />}
           {currentPage === 'sessions' && <SessionsPage />}
           {currentPage === 'projects' && <ProjectsPage />}
+          {currentPage === 'cost-comparison' && <CostComparisonPage />}
+          {currentPage === 'admin-cost-comparison' && <CostComparisonPage orgWide />}
           {currentPage === 'profile' && <ProfilePage />}
           {currentPage === 'admin-org' && (
             <AdminOrgPage onSelectDeveloper={handleSelectDeveloper} />

@@ -187,7 +187,7 @@ function PageHeader({ range, setRange, setOffset, sessions }: {
   return (
     <div className="flex items-end justify-between mb-6 gap-5 flex-wrap">
       <div>
-        <div className="label mb-2">OVERVIEW · /SESSIONS</div>
+        <div className="label mb-2">MY USAGE</div>
         <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Sessions</h1>
         <div className="text-ink-3 mt-2 text-sm">
           {sessions ? `${sessions.length} session${sessions.length !== 1 ? 's' : ''} across your team.` : 'Loading…'}

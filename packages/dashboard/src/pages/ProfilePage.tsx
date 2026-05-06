@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, apiDelete, getUser, setUser } from '@/api/client';
+import { useDashboardStats } from '@/api/hooks';
 import { Pencil, Plus, Copy } from 'lucide-react';
-import { formatRelative } from '@/lib/utils';
+import { formatRelative, formatTokens, formatCost } from '@/lib/utils';
 
 interface ApiKeyRow {
   id: string;
@@ -75,6 +76,8 @@ export function ProfilePage() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(user?.displayName ?? '');
 
+  const stats30d = useDashboardStats('30d');
+
   const { data: keys = [] } = useQuery({
     queryKey: ['my-api-keys'],
     queryFn: () => apiGet<ApiKeyRow[]>('/api/v1/profile/api-keys'),
@@ -124,7 +127,7 @@ export function ProfilePage() {
     <div>
       {/* Page header */}
       <div className="mb-6">
-        <div className="label mb-2">ACCOUNT · /PROFILE</div>
+        <div className="label mb-2">ACCOUNT</div>
         <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Profile & keys</h1>
         <div className="text-ink-3 mt-2 text-sm">
           Your identity and the API keys your machines use to report usage.
@@ -206,9 +209,9 @@ export function ProfilePage() {
           </div>
           <div className="p-5 grid grid-cols-3 gap-3.5">
             {[
-              { l: 'Tokens', v: '—' },
-              { l: 'Cost', v: '—' },
-              { l: 'Sessions', v: String(activeKeys.length) },
+              { l: 'Tokens', v: stats30d.data ? formatTokens(stats30d.data.tokensToday) : '—' },
+              { l: 'Cost', v: stats30d.data ? formatCost(stats30d.data.costToday) : '—' },
+              { l: 'Sessions', v: stats30d.data ? String(stats30d.data.totalSessions) : '—' },
             ].map((x) => (
               <div key={x.l}>
                 <div className="label mb-1.5">{x.l}</div>

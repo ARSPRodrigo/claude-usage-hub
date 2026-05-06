@@ -28,6 +28,13 @@ export interface ModelPricing {
  * Cache reads are 0.1x base input price.
  */
 export const FALLBACK_PRICING: Record<string, ModelPricing> = {
+  // Opus 4.7: $5 input, $25 output
+  'claude-opus-4-7': {
+    inputPerMillion: 5.0,
+    outputPerMillion: 25.0,
+    cacheWritePerMillion: 10.0,   // 2x $5
+    cacheReadPerMillion: 0.5,     // 0.1x $5
+  },
   // Opus 4.6: $5 input, $25 output
   'claude-opus-4-6': {
     inputPerMillion: 5.0,

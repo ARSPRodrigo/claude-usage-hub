@@ -74,7 +74,7 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
       {/* Page header */}
       <div className="flex items-end justify-between mb-6 gap-5 flex-wrap">
         <div>
-          <div className="label mb-2">ORGANIZATION · /ADMIN</div>
+          <div className="label mb-2">ORGANIZATION</div>
           <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Team overview</h1>
           <div className="text-ink-3 mt-2 text-sm">
             How your organization is using Claude, by developer.
@@ -100,8 +100,8 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
       >
         {[
           { l: 'Developers', v: String(devStats.length) },
-          { l: 'Tokens · 30d', v: formatTokens(totalTokens) },
-          { l: 'Cost · 30d', v: formatCost(totalCost) },
+          { l: `Tokens · ${range.toUpperCase()}`, v: formatTokens(totalTokens) },
+          { l: `Cost · ${range.toUpperCase()}`, v: formatCost(totalCost) },
         ].map((s, i) => (
           <div key={i} style={{ padding: '22px', borderRight: i < 2 ? '1px solid var(--line)' : 'none' }}>
             <div className="label mb-2.5">{s.l}</div>
@@ -116,7 +116,7 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
       <div className="rounded-card border border-line bg-surface overflow-hidden">
         <div className="px-5 py-4 border-b border-line flex items-center justify-between">
           <div>
-            <div className="label">Members · last 30 days</div>
+            <div className="label">Members · {range === 'all' ? 'all time' : `last ${range.toUpperCase()}`}</div>
             <div className="text-[15.5px] font-medium mt-1.5">Ranked by consumption</div>
           </div>
         </div>
