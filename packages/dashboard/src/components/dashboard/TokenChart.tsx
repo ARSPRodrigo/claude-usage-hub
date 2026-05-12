@@ -48,13 +48,25 @@ export function TokenChart({ data, isLoading, range = '7D' }: TokenChartProps) {
     return order.indexOf(a) - order.indexOf(b);
   });
 
+  const formatBucket = (bucket: string): string => {
+    const d = new Date(bucket);
+    switch (range) {
+      case '5H':
+      case '24H':
+        return d.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+      case '7D':
+        return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' });
+      case '30D':
+      case 'ALL':
+      default:
+        return d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+    }
+  };
+
   const chartData = Array.from(bucketMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([bucket, values]) => ({
-      date: new Date(bucket).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      }),
+      date: formatBucket(bucket),
       ...values,
     }));
 
@@ -126,6 +138,7 @@ export function TokenChart({ data, isLoading, range = '7D' }: TokenChartProps) {
               axisLine={false}
               tickLine={false}
               dy={8}
+              minTickGap={24}
             />
             <YAxis
               tick={{ fill: theme.axis, fontSize: 10, fontFamily: '"JetBrains Mono"' }}
