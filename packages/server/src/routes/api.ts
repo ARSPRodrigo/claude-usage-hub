@@ -34,13 +34,17 @@ function parseRange(c: { req: { query: (key: string) => string | undefined } }):
 }
 
 /**
- * Get the developer scope for queries.
- * Returns developerId for developer role (scoped), undefined for admin roles/local (all data).
+ * Get the developer scope for personal /dashboard/* queries.
+ *
+ * Always returns the caller's developerId — even for admins. The
+ * /dashboard/* routes are the user's *personal* view; admins who want
+ * org-wide aggregates use /admin/* endpoints instead. Local mode (no
+ * auth) returns undefined so the single-user instance sees everything.
  */
 function getDeveloperScope(c: Context): string | undefined {
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return undefined; // local mode — no scoping
-  return auth.role === 'developer' ? auth.developerId : undefined;
+  return auth.developerId;
 }
 
 const api = new Hono<AppEnv>();

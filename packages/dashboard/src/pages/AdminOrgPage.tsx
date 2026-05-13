@@ -22,6 +22,9 @@ interface DeveloperStat {
   role?: string;
   totalTokens: number;
   costUsd: number;
+  /** Distinct session count. */
+  sessionCount: number;
+  /** Raw usage entry count (kept for backwards compat with older servers). */
   entryCount: number;
   lastSeen: string | null;
 }
@@ -193,7 +196,7 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-right mono tabular">{formatCost(d.costUsd)}</td>
-                    <td className="px-4 py-3.5 text-right mono tabular">{d.entryCount}</td>
+                    <td className="px-4 py-3.5 text-right mono tabular">{d.sessionCount ?? d.entryCount}</td>
                     <td className="px-4 py-3.5 text-ink-3 text-xs">
                       {d.lastSeen ? formatRelative(d.lastSeen) : 'Never'}
                     </td>

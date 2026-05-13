@@ -254,7 +254,31 @@ describe('auth integration (team mode)', () => {
       expect(body.costToday).toBeCloseTo(0.30, 2);
     });
 
-    it('admin sees all data', async () => {
+    it('admin sees only own data on /dashboard/* (personal scope)', async () => {
+      const { adminId } = setupUsers();
+
+      insertEntries([
+        makeEntry({ developerId: 'admin-001', costUsd: 0.10 }),
+        makeEntry({ developerId: 'other-dev', costUsd: 0.50 }),
+      ]);
+
+      const token = await signJwt({
+        id: adminId,
+        email: 'admin@test.com',
+        role: 'platform_owner',
+        developerId: 'admin-001',
+      });
+
+      // /dashboard/* is the admin's *personal* view — must NOT include other devs.
+      const res = await app.request('/api/v1/dashboard/stats?range=all', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json() as any;
+      expect(body.costToday).toBeCloseTo(0.10, 2);
+    });
+
+    it('admin sees all data on /admin/stats/overview (org-wide)', async () => {
       const { adminId } = setupUsers();
 
       insertEntries([
@@ -269,7 +293,7 @@ describe('auth integration (team mode)', () => {
         developerId: 'admin-001',
       });
 
-      const res = await app.request('/api/v1/dashboard/stats?range=all', {
+      const res = await app.request('/api/v1/admin/stats/overview?range=all', {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(res.status).toBe(200);

@@ -703,6 +703,9 @@ export interface DeveloperStatRow {
   role: string;
   totalTokens: number;
   costUsd: number;
+  /** Distinct session count for this developer in the time range. */
+  sessionCount: number;
+  /** Raw count of usage_entries rows. Useful for "activity" but NOT sessions. */
   entryCount: number;
   lastSeen: string | null;
 }
@@ -765,6 +768,7 @@ export function getDeveloperStats(
       u.role           AS role,
       COALESCE(SUM(e.input_tokens + e.output_tokens + e.cache_creation_tokens + e.cache_read_tokens), 0) AS totalTokens,
       COALESCE(SUM(e.cost_usd), 0)  AS costUsd,
+      COUNT(DISTINCT e.session_id)  AS sessionCount,
       COUNT(e.id)                   AS entryCount,
       MAX(e.timestamp)              AS lastSeen
     FROM users u
