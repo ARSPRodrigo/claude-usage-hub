@@ -20,10 +20,45 @@ import {
 import { hashPassword, generateApiKey } from '../services/auth-utils.js';
 import { invitationRoutes } from './invitations.js';
 import { getDeveloperStats, getDashboardStats, getTokenTimeseries, getAggregateTokensByTier } from '../db/repository.js';
+import { listOrganizations, listWorkspaces, findOrganizationById, findWorkspaceById } from '../db/org-repository.js';
 import { requireAdmin, requirePrimaryOwner } from '../middleware/auth.js';
 
 const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
 const admin = new Hono<AppEnv>();
+
+/**
+ * Parse optional ?orgId=&workspaceId= query params, validating membership.
+ * Returns the scope filter to pass to repository queries.
+ *
+ * Platform admin: any org/workspace allowed.
+ * Org owner: only their owned orgs allowed; others stripped to undefined.
+ * Anyone else: stripped (admin routes are already JWT-protected, this is belt
+ * and braces for the future when /admin is opened to org_owner role).
+ */
+function parseScope(c: { req: { query: (k: string) => string | undefined }; get: (k: 'auth') => unknown }):
+  { organizationId?: string; workspaceId?: string } {
+  const auth = c.get('auth') as AuthContext | undefined;
+  const orgId = c.req.query('orgId');
+  const wsId = c.req.query('workspaceId');
+  if (!orgId && !wsId) return {};
+
+  // Validate org/workspace exist.
+  const validOrg = orgId ? !!findOrganizationById(orgId) : true;
+  const validWs = wsId ? !!findWorkspaceById(wsId) : true;
+  if (!validOrg || !validWs) return {};
+
+  // Platform admin / owner: trust the request.
+  // Compare as string to allow legacy role values during rollout.
+  const role = String(auth?.role ?? '');
+  const isPlatform =
+    role === 'platform_owner' || role === 'platform_admin' || role === 'primary_owner' || role === 'owner';
+  if (isPlatform) return { ...(orgId ? { organizationId: orgId } : {}), ...(wsId ? { workspaceId: wsId } : {}) };
+
+  // Org owner: only allow scoping to orgs they own.
+  const ownedOrgs = auth?.ownedOrgIds ?? [];
+  if (orgId && !ownedOrgs.includes(orgId)) return {};
+  return { ...(orgId ? { organizationId: orgId } : {}), ...(wsId ? { workspaceId: wsId } : {}) };
+}
 
 /** POST /api/v1/admin/developers — create a developer account. */
 admin.post('/developers', async (c) => {
@@ -183,7 +218,7 @@ admin.route('/invitations', invitationRoutes);
 admin.get('/stats/developers', (c) => {
   const rangeParam = c.req.query('range') ?? 'all';
   const range: TimeRange = VALID_RANGES.has(rangeParam) ? (rangeParam as TimeRange) : 'all';
-  return c.json(getDeveloperStats(range));
+  return c.json(getDeveloperStats(range, parseScope(c)));
 });
 
 /** GET /api/v1/admin/stats/overview — org-wide totals */
@@ -191,7 +226,7 @@ admin.get('/stats/overview', (c) => {
   const range = (c.req.query('range') as 'all' | '7d' | '30d' | '24h' | '5h') ?? 'all';
   const validRanges = new Set(['5h', '24h', '7d', '30d', 'all']);
   const safeRange = validRanges.has(range) ? range : 'all';
-  return c.json(getDashboardStats(safeRange as import('@claude-usage-hub/shared').TimeRange));
+  return c.json(getDashboardStats(safeRange as import('@claude-usage-hub/shared').TimeRange, parseScope(c)));
 });
 
 /** GET /api/v1/admin/developer-stats/:developerId — scoped stats for a developer */
@@ -265,7 +300,7 @@ admin.delete('/api-keys/:id/data', requireAdmin, (c) => {
 admin.get('/cost-comparison', (c) => {
   const rangeParam = c.req.query('range') ?? '24h';
   const range: TimeRange = VALID_RANGES.has(rangeParam) ? (rangeParam as TimeRange) : '24h';
-  const tiers = getAggregateTokensByTier(range); // no developerId = org-wide
+  const tiers = getAggregateTokensByTier(range, parseScope(c)); // optional org/workspace scope
 
   const opusComparisons = computeComparisonCosts({
     inputTokens: tiers.opus.inputTokens,

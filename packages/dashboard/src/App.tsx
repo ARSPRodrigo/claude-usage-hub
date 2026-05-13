@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Sun, Moon } from 'lucide-react';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { OrgSwitcher } from '@/components/layout/OrgSwitcher';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { SessionsPage } from '@/pages/SessionsPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
@@ -152,6 +153,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <OrgSwitcher />
             <button
               onClick={() => queryClient.invalidateQueries()}
               title="Refresh"

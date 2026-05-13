@@ -163,11 +163,51 @@ export function useCostComparison(range: TimeRange) {
   });
 }
 
-export function useAdminCostComparison(range: TimeRange) {
+export function useAdminCostComparison(range: TimeRange, scope: { orgId?: string | null; workspaceId?: string | null } = {}) {
+  const orgId = scope.orgId ?? '';
+  const workspaceId = scope.workspaceId ?? '';
   return useQuery({
-    queryKey: ['admin-cost-comparison', range],
-    queryFn: () => apiGet<CostComparisonResponse>('/api/v1/admin/cost-comparison', { range }),
+    queryKey: ['admin-cost-comparison', range, orgId, workspaceId],
+    queryFn: () => apiGet<CostComparisonResponse>('/api/v1/admin/cost-comparison', {
+      range,
+      ...(orgId ? { orgId } : {}),
+      ...(workspaceId ? { workspaceId } : {}),
+    }),
     refetchInterval: 60_000,
+  });
+}
+
+// ── Organizations & workspaces (Phase 2) ────────────────────────────────
+
+export interface OrgRow {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+}
+
+export interface WorkspaceRow {
+  id: string;
+  orgId: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+}
+
+export function useOrgList() {
+  return useQuery({
+    queryKey: ['orgs'],
+    queryFn: () => apiGet<OrgRow[]>('/api/v1/dashboard/orgs'),
+    staleTime: 60_000,
+  });
+}
+
+export function useWorkspaceList(orgId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['workspaces', orgId ?? null],
+    queryFn: () => apiGet<WorkspaceRow[]>('/api/v1/dashboard/workspaces', orgId ? { orgId } : {}),
+    staleTime: 60_000,
+    enabled: orgId !== undefined,
   });
 }
 

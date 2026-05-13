@@ -4,6 +4,7 @@ import { apiGet, apiDelete, getUser } from '@/api/client';
 import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import { formatTokens, formatCost, formatRelative } from '@/lib/utils';
+import { useScope } from '@/lib/scope';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
@@ -49,6 +50,7 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
   const isOwner = currentUser?.role === 'primary_owner' || currentUser?.role === 'owner';
   const [range, setRange] = useState<TimeRange>('7d');
   const [wipingId, setWipingId] = useState<string | null>(null);
+  const scope = useScope();
 
   const wipeDeveloper = useMutation({
     mutationFn: (developerId: string) =>
@@ -61,8 +63,12 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
   });
 
   const { data: devStats = [] } = useQuery({
-    queryKey: ['admin-dev-stats', range],
-    queryFn: () => apiGet<DeveloperStat[]>('/api/v1/admin/stats/developers', { range }),
+    queryKey: ['admin-dev-stats', range, scope.orgId, scope.workspaceId],
+    queryFn: () => apiGet<DeveloperStat[]>('/api/v1/admin/stats/developers', {
+      range,
+      ...(scope.orgId ? { orgId: scope.orgId } : {}),
+      ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
+    }),
   });
 
   const totalCost = devStats.reduce((s, d) => s + d.costUsd, 0);

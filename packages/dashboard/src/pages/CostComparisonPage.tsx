@@ -12,6 +12,7 @@ import {
 import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { ApiError } from '@/components/ApiError';
 import { useCostComparison, useAdminCostComparison } from '@/api/hooks';
+import { useScope } from '@/lib/scope';
 import { formatTokens, formatCost } from '@/lib/utils';
 import { getTheme } from '@/lib/chart-theme';
 
@@ -193,8 +194,9 @@ function TierSection({
 
 export function CostComparisonPage({ orgWide = false }: { orgWide?: boolean } = {}) {
   const [range, setRange] = useState<TimeRange>('7d');
+  const scope = useScope();
   const personal = useCostComparison(range);
-  const admin = useAdminCostComparison(range);
+  const admin = useAdminCostComparison(range, { orgId: scope.orgId, workspaceId: scope.workspaceId });
   const { data, isLoading, isError, refetch } = orgWide ? admin : personal;
 
   const eyebrow = orgWide ? 'ORGANIZATION' : 'MY USAGE';

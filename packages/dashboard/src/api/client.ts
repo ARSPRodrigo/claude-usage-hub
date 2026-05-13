@@ -5,7 +5,9 @@ export interface StoredUser {
   id: string;
   email: string;
   displayName: string;
-  role: 'primary_owner' | 'owner' | 'developer';
+  // Accept both new and legacy role names (existing JWTs from before the
+  // role-rename rollout still carry primary_owner / owner).
+  role: 'platform_owner' | 'platform_admin' | 'developer' | 'primary_owner' | 'owner';
   developerId: string;
 }
 
