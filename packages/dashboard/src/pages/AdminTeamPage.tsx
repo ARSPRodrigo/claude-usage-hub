@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, apiDelete, getUser } from '@/api/client';
 import { Plus, Copy, Trash2 } from 'lucide-react';
+import { useOrgList, useWorkspaceList } from '@/api/hooks';
 
 interface Invitation {
   id: string;
@@ -63,8 +64,26 @@ export function AdminTeamPage() {
   const currentUser = getUser();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'developer' | 'owner'>('developer');
+  const [inviteOrgId, setInviteOrgId] = useState<string>('default');
+  const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string>('default-ws');
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const { data: orgs = [] } = useOrgList();
+  const { data: workspacesForInvite = [] } = useWorkspaceList(inviteOrgId);
+
+  // Whenever the workspace list refreshes (org changed, first load), reset
+  // the selected workspace to the first available unless it's still valid.
+  useEffect(() => {
+    if (workspacesForInvite.length === 0) {
+      setInviteWorkspaceId('');
+      return;
+    }
+    const currentStillValid = workspacesForInvite.some((w) => w.id === inviteWorkspaceId);
+    if (!currentStillValid) {
+      setInviteWorkspaceId(workspacesForInvite[0].id);
+    }
+  }, [workspacesForInvite, inviteWorkspaceId]);
 
   const { data: invitations = [] } = useQuery({
     queryKey: ['admin-invitations'],
@@ -77,10 +96,10 @@ export function AdminTeamPage() {
   });
 
   const createInvite = useMutation({
-    mutationFn: ({ email, role }: { email: string; role: string }) =>
+    mutationFn: ({ email, role, orgId, workspaceId }: { email: string; role: string; orgId: string; workspaceId: string }) =>
       apiPost<{ id: string; inviteUrl: string; email: string; expiresAt: string; role: string }>(
         '/api/v1/admin/invitations',
-        { email, role },
+        { email, role, orgId, workspaceId },
       ),
     onSuccess: (data) => {
       setInviteUrl(data.inviteUrl);
@@ -120,33 +139,67 @@ export function AdminTeamPage() {
 
       {/* Pending invites card */}
       <div className="rounded-card border border-line bg-surface mb-4">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-line-2">
-          <div>
-            <div className="text-[15px] font-medium">Pending invites</div>
-            <div className="text-ink-3 text-[13px] mt-1">
-              {pendingInvites.length} invite{pendingInvites.length !== 1 ? 's' : ''} outstanding.
+        <div className="px-5 py-4 border-b border-line-2">
+          <div className="flex items-center justify-between mb-3.5">
+            <div>
+              <div className="text-[15px] font-medium">Pending invites</div>
+              <div className="text-ink-3 text-[13px] mt-1">
+                {pendingInvites.length} invite{pendingInvites.length !== 1 ? 's' : ''} outstanding.
+              </div>
             </div>
           </div>
-          <div className="flex gap-2 items-center">
+          {/* Invite form — two rows so 4 inputs fit without horizontal scroll */}
+          <div className="flex flex-wrap gap-2 items-center">
             <input
               type="email"
               value={inviteEmail}
               onChange={(e) => { setInviteEmail(e.target.value); setInviteUrl(null); }}
               placeholder="name@example.com"
-              className="px-3 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none w-52"
-              onKeyDown={(e) => { if (e.key === 'Enter' && inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole }); }}
+              className="px-3 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none w-60"
+              onKeyDown={(e) => { if (e.key === 'Enter' && inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteWorkspaceId }); }}
             />
             <select
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value as 'developer' | 'owner')}
               className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+              title="Role"
             >
               <option value="developer">Developer</option>
-              <option value="owner">Owner</option>
+              <option value="owner">Admin</option>
+            </select>
+            <select
+              value={inviteOrgId}
+              onChange={(e) => {
+                const newOrgId = e.target.value;
+                setInviteOrgId(newOrgId);
+                // Reset workspace when org changes — the workspace list will refetch.
+                setInviteWorkspaceId('');
+              }}
+              className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+              title="Organization"
+            >
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+            <select
+              value={inviteWorkspaceId}
+              onChange={(e) => setInviteWorkspaceId(e.target.value)}
+              className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+              title="Workspace"
+              disabled={workspacesForInvite.length === 0}
+            >
+              {workspacesForInvite.length === 0 && <option value="">No workspaces…</option>}
+              {workspacesForInvite.map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
             </select>
             <button
-              onClick={() => { if (inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole }); }}
-              disabled={!inviteEmail.trim() || createInvite.isPending}
+              onClick={() => {
+                if (!inviteEmail.trim() || !inviteWorkspaceId) return;
+                createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteWorkspaceId });
+              }}
+              disabled={!inviteEmail.trim() || !inviteWorkspaceId || createInvite.isPending}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />

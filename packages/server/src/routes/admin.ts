@@ -33,6 +33,9 @@ import {
   deleteWorkspace,
   writeAudit,
   listRoleAudit,
+  assignUserToWorkspace,
+  getActiveOrgMembership,
+  getActiveWorkspaceMembership,
 } from '../db/org-repository.js';
 import { requireAdmin, requirePrimaryOwner } from '../middleware/auth.js';
 
@@ -455,6 +458,67 @@ admin.delete('/workspaces/:id', (c) => {
   const result = deleteWorkspace(id);
   if (!result.ok) return c.json({ error: result.reason }, 409);
   writeAudit({ id: randomUUID(), actorId: auth.userId, targetId: auth.userId, action: 'delete_workspace', scopeId: id, scopeType: 'workspace' });
+  return c.json({ ok: true });
+});
+
+// ── Members (Phase 3b) ───────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/members
+ *   List all users with their current org/workspace.
+ *   Used by the Manage > Members tab.
+ */
+admin.get('/members', (c) => {
+  const users = listUsers();
+  return c.json(users.map((u) => {
+    const org = getActiveOrgMembership(u.id);
+    const ws = getActiveWorkspaceMembership(u.id);
+    return {
+      id: u.id,
+      email: u.email,
+      displayName: u.display_name,
+      role: u.role,
+      developerId: u.developer_id,
+      createdAt: u.created_at,
+      currentOrgId: org?.orgId ?? null,
+      currentWorkspaceId: ws?.workspaceId ?? null,
+    };
+  }));
+});
+
+/**
+ * POST /api/v1/admin/users/:id/move
+ *   Body: { orgId, workspaceId }
+ *   Closes active memberships, opens new ones.
+ *   Past usage_entries are not retouched — historical attribution stays.
+ */
+admin.post('/users/:id/move', async (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const userId = c.req.param('id');
+  const body = await c.req.json() as { orgId?: string; workspaceId?: string };
+  if (!body.orgId || !body.workspaceId) {
+    return c.json({ error: 'orgId and workspaceId are required' }, 400);
+  }
+  const target = findUserById(userId);
+  if (!target) return c.json({ error: 'User not found' }, 404);
+  const org = findOrganizationById(body.orgId);
+  if (!org) return c.json({ error: 'Organization not found' }, 404);
+  const ws = findWorkspaceById(body.workspaceId);
+  if (!ws) return c.json({ error: 'Workspace not found' }, 404);
+  if (ws.orgId !== org.id) {
+    return c.json({ error: 'Workspace does not belong to the chosen organization' }, 400);
+  }
+
+  assignUserToWorkspace(userId, body.orgId, body.workspaceId);
+  writeAudit({
+    id: randomUUID(),
+    actorId: auth.userId,
+    targetId: userId,
+    action: 'move_user',
+    scopeId: body.workspaceId,
+    scopeType: 'workspace',
+  });
   return c.json({ ok: true });
 });
 

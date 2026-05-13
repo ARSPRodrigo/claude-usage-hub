@@ -1,12 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Building2, Layers, FileClock } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Layers, FileClock, Users, ArrowRight, Search } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '@/api/client';
-import { useAdminOrgList, useAdminWorkspaceList, type OrgRow, type WorkspaceRow } from '@/api/hooks';
+import {
+  useAdminOrgList,
+  useAdminWorkspaceList,
+  useAdminMembers,
+  useWorkspaceList,
+  type OrgRow,
+  type WorkspaceRow,
+  type MemberRow,
+} from '@/api/hooks';
 import { formatRelative } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
-type Tab = 'orgs' | 'workspaces' | 'audit';
+type Tab = 'orgs' | 'workspaces' | 'members' | 'audit';
 
 async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   const token = localStorage.getItem('chub_token');
@@ -39,6 +47,7 @@ export function ManagePage() {
         {([
           { id: 'orgs' as Tab, label: 'Organizations', Icon: Building2 },
           { id: 'workspaces' as Tab, label: 'Workspaces', Icon: Layers },
+          { id: 'members' as Tab, label: 'Members', Icon: Users },
           { id: 'audit' as Tab, label: 'Audit log', Icon: FileClock },
         ]).map(({ id, label, Icon }) => (
           <button
@@ -59,6 +68,7 @@ export function ManagePage() {
 
       {tab === 'orgs' && <OrgsTab />}
       {tab === 'workspaces' && <WorkspacesTab />}
+      {tab === 'members' && <MembersTab />}
       {tab === 'audit' && <AuditTab />}
     </div>
   );
@@ -351,6 +361,227 @@ interface AuditEntry {
   scopeId: string | null;
   scopeType: 'org' | 'workspace' | null;
   timestamp: string;
+}
+
+// ── Members tab ───────────────────────────────────────────────────────────
+
+function MembersTab() {
+  const qc = useQueryClient();
+  const { data: members = [], isLoading } = useAdminMembers();
+  const { data: orgs = [] } = useAdminOrgList();
+
+  const [query, setQuery] = useState('');
+  const [orgFilter, setOrgFilter] = useState<'all' | string>('all');
+  const [movingMember, setMovingMember] = useState<MemberRow | null>(null);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return members.filter((m) => {
+      if (orgFilter !== 'all' && (m.currentOrgId ?? '') !== orgFilter) return false;
+      if (!q) return true;
+      return (
+        m.email.toLowerCase().includes(q) ||
+        m.displayName.toLowerCase().includes(q)
+      );
+    });
+  }, [members, query, orgFilter]);
+
+  const orgById = useMemo(() => new Map(orgs.map((o) => [o.id, o])), [orgs]);
+
+  return (
+    <div>
+      {/* Filters */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-line bg-surface rounded-btn">
+          <Search className="h-3.5 w-3.5 text-ink-3" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or email…"
+            className="bg-transparent text-[13px] text-ink placeholder:text-ink-3 focus:outline-none w-64"
+          />
+        </div>
+        <select
+          value={orgFilter}
+          onChange={(e) => setOrgFilter(e.target.value)}
+          className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+        >
+          <option value="all">All organizations</option>
+          {orgs.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </select>
+        <span className="text-ink-3 text-xs ml-auto">{filtered.length} of {members.length} member{members.length === 1 ? '' : 's'}</span>
+      </div>
+
+      <div className="rounded-card border border-line bg-surface overflow-hidden">
+        {isLoading ? (
+          <div className="p-5 text-sm text-ink-3">Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-5 text-sm text-ink-3">No members match.</div>
+        ) : (
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-line">
+                {['Name', 'Email', 'Role', 'Organization', 'Workspace', ''].map((h) => (
+                  <th key={h} className="label py-2.5 px-4 text-left">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((m, i) => (
+                <tr key={m.id} style={{ borderBottom: i === filtered.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+                  <td className="px-4 py-3 font-medium">{m.displayName}</td>
+                  <td className="px-4 py-3 mono text-ink-3 text-xs">{m.email}</td>
+                  <td className="px-4 py-3 text-ink-2 text-xs">{labelForRole(m.role)}</td>
+                  <td className="px-4 py-3 text-ink-2">
+                    {m.currentOrgId ? (orgById.get(m.currentOrgId)?.name ?? m.currentOrgId) : <span className="text-ink-4">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-ink-2 mono text-xs">
+                    {m.currentWorkspaceId ?? <span className="text-ink-4">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => setMovingMember(m)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] border border-line rounded-btn text-ink hover:bg-canvas-alt"
+                    >
+                      Move <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {movingMember && (
+        <MoveMemberModal
+          member={movingMember}
+          onClose={() => setMovingMember(null)}
+          onMoved={() => {
+            setMovingMember(null);
+            void qc.invalidateQueries({ queryKey: ['admin-members-with-scope'] });
+            void qc.invalidateQueries({ queryKey: ['admin-dev-stats'] });
+            void qc.invalidateQueries({ queryKey: ['admin-audit'] });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function labelForRole(role: string): string {
+  if (role === 'platform_owner' || role === 'primary_owner') return 'Owner';
+  if (role === 'platform_admin' || role === 'owner') return 'Admin';
+  return 'Developer';
+}
+
+// ── Move member modal ─────────────────────────────────────────────────────
+
+function MoveMemberModal({
+  member,
+  onClose,
+  onMoved,
+}: {
+  member: MemberRow;
+  onClose: () => void;
+  onMoved: () => void;
+}) {
+  const { data: orgs = [] } = useAdminOrgList();
+  const [orgId, setOrgId] = useState<string>(member.currentOrgId ?? orgs[0]?.id ?? '');
+  const [workspaceId, setWorkspaceId] = useState<string>('');
+  const { data: workspaces = [] } = useWorkspaceList(orgId);
+
+  // Auto-pick first workspace when list arrives or org changes.
+  useEffect(() => {
+    if (workspaces.length === 0) {
+      setWorkspaceId('');
+      return;
+    }
+    if (!workspaces.some((w) => w.id === workspaceId)) {
+      setWorkspaceId(workspaces[0].id);
+    }
+  }, [workspaces, workspaceId]);
+
+  // Default org once orgs load
+  useEffect(() => {
+    if (!orgId && orgs.length > 0) setOrgId(orgs[0].id);
+  }, [orgs, orgId]);
+
+  const move = useMutation({
+    mutationFn: () => apiPost<{ ok: boolean }>(`/api/v1/admin/users/${member.id}/move`, { orgId, workspaceId }),
+    onSuccess: onMoved,
+  });
+
+  const isNoop =
+    orgId === member.currentOrgId &&
+    workspaceId === member.currentWorkspaceId;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-surface border border-line rounded-card shadow-popover w-full max-w-md mx-4 p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-[15px] font-medium mb-1">Move {member.displayName}</div>
+        <div className="text-ink-3 text-xs mono mb-4">{member.email}</div>
+
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="label block mb-1.5">Destination organization</label>
+            <select
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              className="w-full px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+            >
+              {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label block mb-1.5">Destination workspace</label>
+            <select
+              value={workspaceId}
+              onChange={(e) => setWorkspaceId(e.target.value)}
+              className="w-full px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+              disabled={workspaces.length === 0}
+            >
+              {workspaces.length === 0 && <option value="">No workspaces in this org</option>}
+              {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="text-[12px] text-ink-3 leading-relaxed mb-5 p-3 rounded-btn bg-canvas-alt border border-line-2">
+          Past usage stays attributed to where it was generated. From the moment
+          you confirm, new tokens are attributed to the new workspace. This can
+          be reversed by moving the member again.
+        </div>
+
+        {move.isError && (
+          <div className="text-xs text-neg mb-3">
+            {move.error instanceof Error ? move.error.message : 'Failed to move member.'}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-[13px] text-ink-3 hover:text-ink"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => move.mutate()}
+            disabled={!orgId || !workspaceId || isNoop || move.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
+          >
+            {move.isPending ? 'Moving…' : isNoop ? 'No change' : 'Move'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AuditTab() {

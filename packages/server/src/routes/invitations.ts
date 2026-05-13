@@ -29,6 +29,11 @@ import {
 import { verifyGoogleToken } from '../services/google-auth.js';
 import { generateApiKey } from '../services/auth-utils.js';
 import { signJwt, getGoogleConfig } from '../middleware/auth.js';
+import {
+  findOrganizationById,
+  findWorkspaceById,
+  assignUserToWorkspace,
+} from '../db/org-repository.js';
 
 const invitations = new Hono<AppEnv>();
 
@@ -45,7 +50,7 @@ function hashToken(token: string): string {
 /** POST /api/v1/admin/invitations — create a new invitation link */
 invitations.post('/', async (c) => {
   const auth = c.get('auth') as AuthContext;
-  const body = await c.req.json() as { email?: string; role?: string };
+  const body = await c.req.json() as { email?: string; role?: string; orgId?: string; workspaceId?: string };
 
   if (!body.email) {
     return c.json({ error: 'email is required' }, 400);
@@ -56,6 +61,20 @@ invitations.post('/', async (c) => {
 
   // Accept legacy 'owner' and new 'platform_admin'; normalise to new vocabulary.
   const role = (body.role === 'owner' || body.role === 'platform_admin') ? 'platform_admin' : 'developer';
+
+  // Validate org/workspace if provided.
+  const orgId = body.orgId ?? null;
+  const workspaceId = body.workspaceId ?? null;
+  if (orgId && !findOrganizationById(orgId)) {
+    return c.json({ error: 'Organization not found' }, 400);
+  }
+  if (workspaceId) {
+    const ws = findWorkspaceById(workspaceId);
+    if (!ws) return c.json({ error: 'Workspace not found' }, 400);
+    if (orgId && ws.orgId !== orgId) {
+      return c.json({ error: 'Workspace does not belong to the chosen organization' }, 400);
+    }
+  }
 
   // Check if already a registered user
   const existingUser = findUserByEmail(body.email);
@@ -68,13 +87,16 @@ invitations.post('/', async (c) => {
   const id = randomUUID();
   const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  createInvitation({ id, email: body.email, tokenHash, invitedBy: auth.userId, expiresAt, role });
+  createInvitation({
+    id, email: body.email, tokenHash, invitedBy: auth.userId, expiresAt, role,
+    orgId, workspaceId,
+  });
 
   // Return the invite URL — admin copies this and shares via chat/Slack
   const origin = new URL(c.req.url).origin;
   const inviteUrl = `${origin}/invite/accept?token=${token}`;
 
-  return c.json({ id, email: body.email, inviteUrl, expiresAt, role }, 201);
+  return c.json({ id, email: body.email, inviteUrl, expiresAt, role, orgId, workspaceId }, 201);
 });
 
 /** GET /api/v1/admin/invitations — list all invitations */
@@ -152,6 +174,7 @@ export async function acceptInvite(c: import('hono').Context<AppEnv>): Promise<R
 
   // Find or create the user
   let user = findUserByGoogleId(googleUser.sub) ?? findUserByEmail(googleUser.email);
+  const isNewUser = !user;
   if (!user) {
     const id = randomUUID();
     const developerId = `dev-${id.slice(0, 8)}`;
@@ -166,6 +189,18 @@ export async function acceptInvite(c: import('hono').Context<AppEnv>): Promise<R
     user = findUserById(id)!;
   } else if (!user.google_id) {
     updateUserGoogleId(user.id, googleUser.sub);
+  }
+
+  // Assign org/workspace memberships. If the invite specified a target,
+  // route the user there. Otherwise default to 'default' org/workspace.
+  const targetOrgId = invitation.org_id ?? 'default';
+  const targetWorkspaceId = invitation.workspace_id ?? 'default-ws';
+  // For new users (and existing users without an active membership): always set.
+  // For existing users with an active membership: only override if the invite
+  // explicitly specified a target (don't silently move them).
+  const shouldAssign = isNewUser || invitation.org_id !== null || invitation.workspace_id !== null;
+  if (shouldAssign) {
+    assignUserToWorkspace(user.id, targetOrgId, targetWorkspaceId);
   }
 
   // Generate initial API key for this machine

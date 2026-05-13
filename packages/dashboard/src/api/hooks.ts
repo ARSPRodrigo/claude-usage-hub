@@ -230,6 +230,26 @@ export function useAdminWorkspaceList(orgId: string | null) {
   });
 }
 
+export interface MemberRow {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  developerId: string;
+  createdAt: string;
+  currentOrgId: string | null;
+  currentWorkspaceId: string | null;
+}
+
+/** All members with their current org/workspace — Platform Admin only. */
+export function useAdminMembers() {
+  return useQuery({
+    queryKey: ['admin-members-with-scope'],
+    queryFn: () => apiGet<MemberRow[]>('/api/v1/admin/members'),
+    staleTime: 15_000,
+  });
+}
+
 export function useProjects(range: TimeRange) {
   return useQuery({
     queryKey: ['projects', range],
