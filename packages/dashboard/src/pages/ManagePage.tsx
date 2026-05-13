@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Building2, Layers, FileClock, Users, ArrowRight, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowRight, Search } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '@/api/client';
 import {
   useAdminOrgList,
@@ -12,10 +12,16 @@ import {
   type MemberRow,
 } from '@/api/hooks';
 import { formatRelative } from '@/lib/utils';
-import { cn } from '@/lib/utils';
 import { useScope } from '@/lib/scope';
 
-type Tab = 'orgs' | 'workspaces' | 'members' | 'audit';
+export type ManageSection = 'orgs' | 'workspaces' | 'members' | 'audit';
+
+const SECTION_META: Record<ManageSection, { title: string; subtitle: string }> = {
+  orgs:       { title: 'Organizations', subtitle: 'Create, rename, and remove organizations.' },
+  workspaces: { title: 'Workspaces',    subtitle: 'Workspaces live inside organizations.' },
+  members:    { title: 'Members',       subtitle: 'Search every member and move them between orgs and workspaces.' },
+  audit:      { title: 'Audit log',     subtitle: 'Recent role and membership changes.' },
+};
 
 async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   const token = localStorage.getItem('chub_token');
@@ -31,46 +37,21 @@ async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function ManagePage() {
-  const [tab, setTab] = useState<Tab>('orgs');
-
+export function ManagePage({ section }: { section: ManageSection }) {
+  const meta = SECTION_META[section];
   return (
     <div>
       {/* Page header */}
       <div className="mb-6">
-        <div className="label mb-2">ORGANIZATION</div>
-        <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Manage</h1>
-        <div className="text-ink-3 mt-2 text-sm">Create and organize organizations, workspaces, and members.</div>
+        <div className="label mb-2">MANAGE</div>
+        <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>{meta.title}</h1>
+        <div className="text-ink-3 mt-2 text-sm">{meta.subtitle}</div>
       </div>
 
-      {/* Tab strip */}
-      <div className="flex gap-1 mb-5 border-b border-line">
-        {([
-          { id: 'orgs' as Tab, label: 'Organizations', Icon: Building2 },
-          { id: 'workspaces' as Tab, label: 'Workspaces', Icon: Layers },
-          { id: 'members' as Tab, label: 'Members', Icon: Users },
-          { id: 'audit' as Tab, label: 'Audit log', Icon: FileClock },
-        ]).map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-3.5 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors',
-              tab === id
-                ? 'border-ink text-ink'
-                : 'border-transparent text-ink-3 hover:text-ink',
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'orgs' && <OrgsTab />}
-      {tab === 'workspaces' && <WorkspacesTab />}
-      {tab === 'members' && <MembersTab />}
-      {tab === 'audit' && <AuditTab />}
+      {section === 'orgs' && <OrgsTab />}
+      {section === 'workspaces' && <WorkspacesTab />}
+      {section === 'members' && <MembersTab />}
+      {section === 'audit' && <AuditTab />}
     </div>
   );
 }

@@ -19,7 +19,11 @@ import { ManagePage } from '@/pages/ManagePage';
 import { apiGet, getToken, getUser, setUser } from '@/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 
-export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'admin-manage' | 'settings' | 'developer-detail' | 'help';
+export type InnerPage =
+  | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile'
+  | 'admin-org' | 'admin-team' | 'admin-cost-comparison'
+  | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit'
+  | 'settings' | 'developer-detail' | 'help';
 
 const PAGE_LABELS: Record<InnerPage, string> = {
   dashboard: 'DASHBOARD',
@@ -31,7 +35,10 @@ const PAGE_LABELS: Record<InnerPage, string> = {
   settings: 'SETTINGS',
   'cost-comparison': 'COST COMPARISON',
   'admin-cost-comparison': 'COST COMPARISON',
-  'admin-manage': 'MANAGE',
+  'manage-organizations': 'ORGANIZATIONS',
+  'manage-workspaces': 'WORKSPACES',
+  'manage-members': 'MEMBERS',
+  'manage-audit': 'AUDIT LOG',
   'developer-detail': 'DEVELOPER',
   help: 'HELP',
 };
@@ -48,7 +55,12 @@ function pathnameToPage(pathname: string): InnerPage | null {
   if (pathname === '/projects') return 'projects';
   if (pathname === '/cost-comparison') return 'cost-comparison';
   if (pathname === '/admin/cost-comparison') return 'admin-cost-comparison';
-  if (pathname === '/admin/manage') return 'admin-manage';
+  if (pathname === '/manage/organizations') return 'manage-organizations';
+  if (pathname === '/manage/workspaces') return 'manage-workspaces';
+  if (pathname === '/manage/members') return 'manage-members';
+  if (pathname === '/manage/audit') return 'manage-audit';
+  // Legacy alias from before the Manage split — redirect target.
+  if (pathname === '/admin/manage') return 'manage-organizations';
   if (pathname === '/admin/org') return 'admin-org';
   if (pathname === '/admin/team') return 'admin-team';
   if (pathname === '/admin/settings') return 'settings';
@@ -128,7 +140,10 @@ export default function App() {
     projects: '/projects',
     'cost-comparison': '/cost-comparison',
     'admin-cost-comparison': '/admin/cost-comparison',
-    'admin-manage': '/admin/manage',
+    'manage-organizations': '/manage/organizations',
+    'manage-workspaces': '/manage/workspaces',
+    'manage-members': '/manage/members',
+    'manage-audit': '/manage/audit',
     profile: '/profile',
     'admin-org': '/admin/org',
     'admin-team': '/admin/team',
@@ -201,7 +216,10 @@ export default function App() {
           {currentPage === 'projects' && <ProjectsPage />}
           {currentPage === 'cost-comparison' && <CostComparisonPage />}
           {currentPage === 'admin-cost-comparison' && <CostComparisonPage orgWide />}
-          {currentPage === 'admin-manage' && <ManagePage />}
+          {currentPage === 'manage-organizations' && <ManagePage section="orgs" />}
+          {currentPage === 'manage-workspaces' && <ManagePage section="workspaces" />}
+          {currentPage === 'manage-members' && <ManagePage section="members" />}
+          {currentPage === 'manage-audit' && <ManagePage section="audit" />}
           {currentPage === 'profile' && <ProfilePage />}
           {currentPage === 'admin-org' && (
             <AdminOrgPage onSelectDeveloper={handleSelectDeveloper} />

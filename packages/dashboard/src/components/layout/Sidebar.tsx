@@ -1,5 +1,5 @@
 import {
-  BarChart3, FolderOpen, Clock, Scale, Building2, Users, Sliders,
+  BarChart3, FolderOpen, Clock, Scale, Building2, Users, Layers, FileClock,
   ChevronUp, User, Settings, LogOut,
   Gauge, HelpCircle,
 } from 'lucide-react';
@@ -8,7 +8,11 @@ import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
 import { getUser, clearAuth, isPlatformAdmin } from '@/api/client';
 
-type Page = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'admin-manage' | 'settings' | 'developer-detail' | 'help';
+type Page =
+  | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile'
+  | 'admin-org' | 'admin-team' | 'admin-cost-comparison'
+  | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit'
+  | 'settings' | 'developer-detail' | 'help';
 
 interface SidebarProps {
   activePage: Page;
@@ -109,7 +113,14 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
               <NavItem id="admin-org" label="Overview" icon={Building2} extraActive="developer-detail" />
               <NavItem id="admin-team" label="Team" icon={Users} />
               <NavItem id="admin-cost-comparison" label="Cost Comparison" icon={Scale} />
-              <NavItem id="admin-manage" label="Manage" icon={Sliders} />
+            </ul>
+
+            <div className="label px-1.5 pt-4.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>Manage</div>
+            <ul className="flex flex-col gap-0.5">
+              <NavItem id="manage-organizations" label="Organizations" icon={Building2} />
+              <NavItem id="manage-workspaces" label="Workspaces" icon={Layers} />
+              <NavItem id="manage-members" label="Members" icon={Users} />
+              <NavItem id="manage-audit" label="Audit log" icon={FileClock} />
             </ul>
           </>
         )}
