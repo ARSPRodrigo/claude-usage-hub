@@ -131,6 +131,44 @@ export function listOwnedWorkspaceIds(userId: string): string[] {
   return rows.map((r) => r.workspace_id);
 }
 
+/** Bulk: { userId -> orgIds owned }. Used by /admin/members to avoid N+1. */
+export function allOrgOwnerships(): Record<string, string[]> {
+  const raw = getRawDb();
+  const rows = raw.prepare(`SELECT user_id, org_id FROM org_owners`).all() as Array<{ user_id: string; org_id: string }>;
+  const out: Record<string, string[]> = {};
+  for (const r of rows) (out[r.user_id] ??= []).push(r.org_id);
+  return out;
+}
+
+/** Bulk: { userId -> workspaceIds owned }. */
+export function allWorkspaceOwnerships(): Record<string, string[]> {
+  const raw = getRawDb();
+  const rows = raw.prepare(`SELECT user_id, workspace_id FROM workspace_owners`).all() as Array<{ user_id: string; workspace_id: string }>;
+  const out: Record<string, string[]> = {};
+  for (const r of rows) (out[r.user_id] ??= []).push(r.workspace_id);
+  return out;
+}
+
+export function addOrgOwner(userId: string, orgId: string): void {
+  const raw = getRawDb();
+  raw.prepare(`INSERT OR IGNORE INTO org_owners (user_id, org_id) VALUES (?, ?)`).run(userId, orgId);
+}
+
+export function removeOrgOwner(userId: string, orgId: string): void {
+  const raw = getRawDb();
+  raw.prepare(`DELETE FROM org_owners WHERE user_id = ? AND org_id = ?`).run(userId, orgId);
+}
+
+export function addWorkspaceOwner(userId: string, workspaceId: string): void {
+  const raw = getRawDb();
+  raw.prepare(`INSERT OR IGNORE INTO workspace_owners (user_id, workspace_id) VALUES (?, ?)`).run(userId, workspaceId);
+}
+
+export function removeWorkspaceOwner(userId: string, workspaceId: string): void {
+  const raw = getRawDb();
+  raw.prepare(`DELETE FROM workspace_owners WHERE user_id = ? AND workspace_id = ?`).run(userId, workspaceId);
+}
+
 // ---------------------------------------------------------------------------
 // Domain auto-assign (read-only in Phase 1; used by sign-in path later)
 // ---------------------------------------------------------------------------

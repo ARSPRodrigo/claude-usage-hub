@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, ArrowRight, Search } from 'lucide-react';
-import { apiGet, apiPost, apiDelete } from '@/api/client';
+import { Plus, Pencil, Trash2, ArrowRight, Search, Shield, X } from 'lucide-react';
+import { apiGet, apiPost, apiDelete, getUser, isPlatformOwner } from '@/api/client';
 import {
   useAdminOrgList,
   useAdminWorkspaceList,
@@ -361,6 +361,7 @@ function MembersTab() {
     setOrgFilter(scope.orgId ?? 'all');
   }, [scope.orgId]);
   const [movingMember, setMovingMember] = useState<MemberRow | null>(null);
+  const [grantingMember, setGrantingMember] = useState<MemberRow | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -375,6 +376,20 @@ function MembersTab() {
   }, [members, query, orgFilter]);
 
   const orgById = useMemo(() => new Map(orgs.map((o) => [o.id, o])), [orgs]);
+
+  // Keep grantingMember in sync with refreshed list so the modal reflects
+  // edits immediately after a mutation invalidates the query.
+  useEffect(() => {
+    if (!grantingMember) return;
+    const fresh = members.find((m) => m.id === grantingMember.id);
+    if (fresh && fresh !== grantingMember) setGrantingMember(fresh);
+  }, [members, grantingMember]);
+
+  const invalidateAll = () => {
+    void qc.invalidateQueries({ queryKey: ['admin-members-with-scope'] });
+    void qc.invalidateQueries({ queryKey: ['admin-dev-stats'] });
+    void qc.invalidateQueries({ queryKey: ['admin-audit'] });
+  };
 
   return (
     <div>
@@ -411,7 +426,7 @@ function MembersTab() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-line">
-                {['Name', 'Email', 'Role', 'Organization', 'Workspace', ''].map((h) => (
+                {['Name', 'Email', 'Role', 'Organization', 'Workspace', 'Owns', ''].map((h) => (
                   <th key={h} className="label py-2.5 px-4 text-left">{h}</th>
                 ))}
               </tr>
@@ -428,13 +443,28 @@ function MembersTab() {
                   <td className="px-4 py-3 text-ink-2 mono text-xs">
                     {m.currentWorkspaceId ?? <span className="text-ink-4">—</span>}
                   </td>
+                  <td className="px-4 py-3">
+                    <OwnedSummary
+                      orgCount={m.ownedOrgIds.length}
+                      wsCount={m.ownedWorkspaceIds.length}
+                    />
+                  </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => setMovingMember(m)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] border border-line rounded-btn text-ink hover:bg-canvas-alt"
-                    >
-                      Move <ArrowRight className="h-3 w-3" />
-                    </button>
+                    <div className="inline-flex gap-1.5">
+                      <button
+                        onClick={() => setGrantingMember(m)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] border border-line rounded-btn text-ink hover:bg-canvas-alt"
+                        title="Manage role and ownership grants"
+                      >
+                        <Shield className="h-3 w-3" /> Grants
+                      </button>
+                      <button
+                        onClick={() => setMovingMember(m)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] border border-line rounded-btn text-ink hover:bg-canvas-alt"
+                      >
+                        Move <ArrowRight className="h-3 w-3" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -449,11 +479,43 @@ function MembersTab() {
           onClose={() => setMovingMember(null)}
           onMoved={() => {
             setMovingMember(null);
-            void qc.invalidateQueries({ queryKey: ['admin-members-with-scope'] });
-            void qc.invalidateQueries({ queryKey: ['admin-dev-stats'] });
-            void qc.invalidateQueries({ queryKey: ['admin-audit'] });
+            invalidateAll();
           }}
         />
+      )}
+
+      {grantingMember && (
+        <GrantsModal
+          member={grantingMember}
+          onClose={() => setGrantingMember(null)}
+          onChange={invalidateAll}
+        />
+      )}
+    </div>
+  );
+}
+
+function OwnedSummary({ orgCount, wsCount }: { orgCount: number; wsCount: number }) {
+  if (orgCount === 0 && wsCount === 0) {
+    return <span className="text-ink-4 text-xs">—</span>;
+  }
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      {orgCount > 0 && (
+        <span
+          className="mono text-[10.5px] px-2 py-0.5 rounded-pill border border-line text-ink-2"
+          style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}
+        >
+          {orgCount} org{orgCount === 1 ? '' : 's'}
+        </span>
+      )}
+      {wsCount > 0 && (
+        <span
+          className="mono text-[10.5px] px-2 py-0.5 rounded-pill border border-line text-ink-2"
+          style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}
+        >
+          {wsCount} ws
+        </span>
       )}
     </div>
   );
@@ -566,6 +628,240 @@ function MoveMemberModal({
           >
             {move.isPending ? 'Moving…' : isNoop ? 'No change' : 'Move'}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Grants modal: platform role + org/workspace ownership ────────────────
+
+function GrantsModal({
+  member,
+  onClose,
+  onChange,
+}: {
+  member: MemberRow;
+  onClose: () => void;
+  onChange: () => void;
+}) {
+  const { data: orgs = [] } = useAdminOrgList();
+  const currentUser = getUser();
+  const ownerCanChangeRole = isPlatformOwner(currentUser?.role);
+  const isSelf = currentUser?.id === member.id;
+  const isPlatformOwnerTarget = member.role === 'platform_owner' || member.role === 'primary_owner';
+  const isPlatformAdminTarget = member.role === 'platform_admin' || member.role === 'owner';
+
+  const orgById = useMemo(() => new Map(orgs.map((o) => [o.id, o])), [orgs]);
+
+  const [addOrgId, setAddOrgId] = useState('');
+  const [addWsOrgId, setAddWsOrgId] = useState('');
+  const [addWsId, setAddWsId] = useState('');
+  const { data: workspacesForAdd = [] } = useWorkspaceList(addWsOrgId || null);
+
+  // Reset workspace pick when the org for adding workspace ownership changes.
+  useEffect(() => {
+    setAddWsId('');
+  }, [addWsOrgId]);
+
+  // Available orgs to grant: ones the member doesn't already own.
+  const grantableOrgs = useMemo(
+    () => orgs.filter((o) => !member.ownedOrgIds.includes(o.id)),
+    [orgs, member.ownedOrgIds],
+  );
+
+  const promote = useMutation({
+    mutationFn: () => apiPost<{ ok: boolean }>(`/api/v1/admin/users/${member.id}/promote-platform-admin`, {}),
+    onSuccess: onChange,
+  });
+  const demote = useMutation({
+    mutationFn: () => apiPost<{ ok: boolean }>(`/api/v1/admin/users/${member.id}/demote-platform-admin`, {}),
+    onSuccess: onChange,
+  });
+  const addOrg = useMutation({
+    mutationFn: (orgId: string) => apiPost<{ ok: boolean }>('/api/v1/admin/org-owners', { userId: member.id, orgId }),
+    onSuccess: () => { setAddOrgId(''); onChange(); },
+  });
+  const removeOrg = useMutation({
+    mutationFn: (orgId: string) => apiDelete<{ ok: boolean }>(`/api/v1/admin/org-owners/${member.id}/${orgId}`),
+    onSuccess: onChange,
+  });
+  const addWs = useMutation({
+    mutationFn: (workspaceId: string) => apiPost<{ ok: boolean }>('/api/v1/admin/workspace-owners', { userId: member.id, workspaceId }),
+    onSuccess: () => { setAddWsId(''); setAddWsOrgId(''); onChange(); },
+  });
+  const removeWs = useMutation({
+    mutationFn: (workspaceId: string) => apiDelete<{ ok: boolean }>(`/api/v1/admin/workspace-owners/${member.id}/${workspaceId}`),
+    onSuccess: onChange,
+  });
+
+  const anyError =
+    promote.error || demote.error || addOrg.error || removeOrg.error || addWs.error || removeWs.error;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-surface border border-line rounded-card shadow-popover w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-line-2 flex items-start justify-between sticky top-0 bg-surface">
+          <div>
+            <div className="text-[15px] font-medium">Grants for {member.displayName}</div>
+            <div className="text-ink-3 text-xs mono mt-0.5">{member.email}</div>
+          </div>
+          <button onClick={onClose} className="p-1 text-ink-3 hover:text-ink"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="p-5 space-y-6">
+          {/* Platform role */}
+          <section>
+            <div className="label mb-2">Platform role</div>
+            <div className="flex items-center justify-between gap-3 p-3 rounded-btn border border-line">
+              <div>
+                <div className="text-[13px] font-medium">{labelForRole(member.role)}</div>
+                <div className="text-ink-3 text-xs mt-0.5">
+                  {isPlatformOwnerTarget
+                    ? 'The platform owner role can only be transferred, not removed.'
+                    : isPlatformAdminTarget
+                      ? 'Can manage orgs, workspaces, and members across the platform.'
+                      : 'Standard user. Sees only their own usage by default.'}
+                </div>
+              </div>
+              {!isPlatformOwnerTarget && !isSelf && ownerCanChangeRole && (
+                <button
+                  onClick={() => (isPlatformAdminTarget ? demote.mutate() : promote.mutate())}
+                  disabled={promote.isPending || demote.isPending}
+                  className="px-3 py-1.5 text-[12px] border border-line rounded-btn text-ink hover:bg-canvas-alt disabled:opacity-50"
+                >
+                  {isPlatformAdminTarget ? 'Demote to Developer' : 'Promote to Admin'}
+                </button>
+              )}
+            </div>
+            {!ownerCanChangeRole && !isPlatformOwnerTarget && (
+              <div className="text-ink-3 text-xs mt-2">Only the platform owner can change platform-staff roles.</div>
+            )}
+            {isSelf && (
+              <div className="text-ink-3 text-xs mt-2">You cannot change your own platform role.</div>
+            )}
+          </section>
+
+          {/* Org ownership */}
+          <section>
+            <div className="label mb-2">Organization ownership</div>
+            <div className="text-ink-3 text-xs mb-2">
+              Org owners can manage workspaces, members, and settings inside that org.
+            </div>
+            {member.ownedOrgIds.length === 0 ? (
+              <div className="text-ink-3 text-xs p-3 rounded-btn border border-line-2 bg-canvas-alt">
+                Not an owner of any organization.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {member.ownedOrgIds.map((id) => (
+                  <div key={id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-btn border border-line">
+                    <div className="text-[13px]">{orgById.get(id)?.name ?? id}</div>
+                    <button
+                      onClick={() => removeOrg.mutate(id)}
+                      disabled={removeOrg.isPending}
+                      className="p-1 text-ink-3 hover:text-neg disabled:opacity-50"
+                      title="Revoke ownership"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {grantableOrgs.length > 0 && (
+              <div className="flex gap-2 mt-2">
+                <select
+                  value={addOrgId}
+                  onChange={(e) => setAddOrgId(e.target.value)}
+                  className="flex-1 px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+                >
+                  <option value="">Grant ownership of…</option>
+                  {grantableOrgs.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => { if (addOrgId) addOrg.mutate(addOrgId); }}
+                  disabled={!addOrgId || addOrg.isPending}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Grant
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* Workspace ownership */}
+          <section>
+            <div className="label mb-2">Workspace ownership</div>
+            <div className="text-ink-3 text-xs mb-2">
+              Workspace owners can manage members and settings inside that workspace.
+            </div>
+            {member.ownedWorkspaceIds.length === 0 ? (
+              <div className="text-ink-3 text-xs p-3 rounded-btn border border-line-2 bg-canvas-alt">
+                Not an owner of any workspace.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {member.ownedWorkspaceIds.map((id) => (
+                  <div key={id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-btn border border-line">
+                    <div className="text-[13px] mono">{id}</div>
+                    <button
+                      onClick={() => removeWs.mutate(id)}
+                      disabled={removeWs.isPending}
+                      className="p-1 text-ink-3 hover:text-neg disabled:opacity-50"
+                      title="Revoke ownership"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-2">
+              <select
+                value={addWsOrgId}
+                onChange={(e) => setAddWsOrgId(e.target.value)}
+                className="flex-1 px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+              >
+                <option value="">In organization…</option>
+                {orgs.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+              <select
+                value={addWsId}
+                onChange={(e) => setAddWsId(e.target.value)}
+                disabled={!addWsOrgId}
+                className="flex-1 px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink disabled:opacity-50"
+              >
+                <option value="">Workspace…</option>
+                {workspacesForAdd
+                  .filter((w) => !member.ownedWorkspaceIds.includes(w.id))
+                  .map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+              <button
+                onClick={() => { if (addWsId) addWs.mutate(addWsId); }}
+                disabled={!addWsId || addWs.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5" /> Grant
+              </button>
+            </div>
+          </section>
+
+          {anyError && (
+            <div className="text-xs text-neg">
+              {anyError instanceof Error ? anyError.message : 'Action failed.'}
+            </div>
+          )}
         </div>
       </div>
     </div>

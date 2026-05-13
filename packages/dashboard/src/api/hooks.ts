@@ -239,6 +239,8 @@ export interface MemberRow {
   createdAt: string;
   currentOrgId: string | null;
   currentWorkspaceId: string | null;
+  ownedOrgIds: string[];
+  ownedWorkspaceIds: string[];
 }
 
 /** All members with their current org/workspace — Platform Admin only. */

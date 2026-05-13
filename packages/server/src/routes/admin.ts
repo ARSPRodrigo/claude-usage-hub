@@ -36,8 +36,14 @@ import {
   assignUserToWorkspace,
   getActiveOrgMembership,
   getActiveWorkspaceMembership,
+  allOrgOwnerships,
+  allWorkspaceOwnerships,
+  addOrgOwner,
+  removeOrgOwner,
+  addWorkspaceOwner,
+  removeWorkspaceOwner,
 } from '../db/org-repository.js';
-import { requireAdmin, requirePrimaryOwner } from '../middleware/auth.js';
+import { requireAdmin, requirePlatformOwner } from '../middleware/auth.js';
 
 const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
 const admin = new Hono<AppEnv>();
@@ -476,6 +482,8 @@ admin.get('/members', (c) => {
   const orgId = c.req.query('orgId');
   const workspaceId = c.req.query('workspaceId');
   const users = listUsers();
+  const orgOwns = allOrgOwnerships();
+  const wsOwns = allWorkspaceOwnerships();
   return c.json(
     users
       .map((u) => {
@@ -490,6 +498,8 @@ admin.get('/members', (c) => {
           createdAt: u.created_at,
           currentOrgId: org?.orgId ?? null,
           currentWorkspaceId: ws?.workspaceId ?? null,
+          ownedOrgIds: orgOwns[u.id] ?? [],
+          ownedWorkspaceIds: wsOwns[u.id] ?? [],
         };
       })
       .filter((m) => {
@@ -532,6 +542,109 @@ admin.post('/users/:id/move', async (c) => {
     action: 'move_user',
     scopeId: body.workspaceId,
     scopeType: 'workspace',
+  });
+  return c.json({ ok: true });
+});
+
+// ── Ownership grants (org / workspace) ──────────────────────────────────
+
+/** POST /api/v1/admin/org-owners — body { userId, orgId } */
+admin.post('/org-owners', async (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const body = await c.req.json() as { userId?: string; orgId?: string };
+  if (!body.userId || !body.orgId) return c.json({ error: 'userId and orgId are required' }, 400);
+  if (!findUserById(body.userId)) return c.json({ error: 'User not found' }, 404);
+  if (!findOrganizationById(body.orgId)) return c.json({ error: 'Organization not found' }, 404);
+  addOrgOwner(body.userId, body.orgId);
+  writeAudit({
+    id: randomUUID(), actorId: auth.userId, targetId: body.userId,
+    action: 'add_org_owner', scopeId: body.orgId, scopeType: 'org',
+  });
+  return c.json({ ok: true });
+});
+
+/** DELETE /api/v1/admin/org-owners/:userId/:orgId */
+admin.delete('/org-owners/:userId/:orgId', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const userId = c.req.param('userId') as string;
+  const orgId = c.req.param('orgId') as string;
+  removeOrgOwner(userId, orgId);
+  writeAudit({
+    id: randomUUID(), actorId: auth.userId, targetId: userId,
+    action: 'remove_org_owner', scopeId: orgId, scopeType: 'org',
+  });
+  return c.json({ ok: true });
+});
+
+/** POST /api/v1/admin/workspace-owners — body { userId, workspaceId } */
+admin.post('/workspace-owners', async (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const body = await c.req.json() as { userId?: string; workspaceId?: string };
+  if (!body.userId || !body.workspaceId) return c.json({ error: 'userId and workspaceId are required' }, 400);
+  if (!findUserById(body.userId)) return c.json({ error: 'User not found' }, 404);
+  if (!findWorkspaceById(body.workspaceId)) return c.json({ error: 'Workspace not found' }, 404);
+  addWorkspaceOwner(body.userId, body.workspaceId);
+  writeAudit({
+    id: randomUUID(), actorId: auth.userId, targetId: body.userId,
+    action: 'add_workspace_owner', scopeId: body.workspaceId, scopeType: 'workspace',
+  });
+  return c.json({ ok: true });
+});
+
+/** DELETE /api/v1/admin/workspace-owners/:userId/:workspaceId */
+admin.delete('/workspace-owners/:userId/:workspaceId', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const userId = c.req.param('userId') as string;
+  const workspaceId = c.req.param('workspaceId') as string;
+  removeWorkspaceOwner(userId, workspaceId);
+  writeAudit({
+    id: randomUUID(), actorId: auth.userId, targetId: userId,
+    action: 'remove_workspace_owner', scopeId: workspaceId, scopeType: 'workspace',
+  });
+  return c.json({ ok: true });
+});
+
+/**
+ * POST /api/v1/admin/users/:id/promote-platform-admin — Platform Owner only
+ * POST /api/v1/admin/users/:id/demote-platform-admin  — Platform Owner only
+ *
+ * These are tighter aliases of PATCH /developers/:id/role. The role PATCH
+ * endpoint is kept for the existing Team page invite/role-change UI; these
+ * dedicated endpoints add Platform-Owner gating and write a clearer audit
+ * entry. They also block self-modification.
+ */
+admin.post('/users/:id/promote-platform-admin', requirePlatformOwner, (c) => {
+  const auth = c.get('auth') as AuthContext;
+  const targetId = c.req.param('id') as string;
+  if (targetId === auth.userId) return c.json({ error: 'Cannot modify your own platform role' }, 403);
+  const target = findUserById(targetId);
+  if (!target) return c.json({ error: 'User not found' }, 404);
+  if (target.role === 'platform_owner' || target.role === 'primary_owner') {
+    return c.json({ error: 'Cannot change the role of the platform owner' }, 403);
+  }
+  updateUserRole(targetId, 'platform_admin');
+  writeAudit({
+    id: randomUUID(), actorId: auth.userId, targetId, action: 'promote_platform_admin',
+  });
+  return c.json({ ok: true });
+});
+
+admin.post('/users/:id/demote-platform-admin', requirePlatformOwner, (c) => {
+  const auth = c.get('auth') as AuthContext;
+  const targetId = c.req.param('id') as string;
+  if (targetId === auth.userId) return c.json({ error: 'Cannot modify your own platform role' }, 403);
+  const target = findUserById(targetId);
+  if (!target) return c.json({ error: 'User not found' }, 404);
+  if (target.role === 'platform_owner' || target.role === 'primary_owner') {
+    return c.json({ error: 'Cannot change the role of the platform owner' }, 403);
+  }
+  updateUserRole(targetId, 'developer');
+  writeAudit({
+    id: randomUUID(), actorId: auth.userId, targetId, action: 'demote_platform_admin',
   });
   return c.json({ ok: true });
 });
