@@ -13,6 +13,7 @@ import {
 } from '@/api/hooks';
 import { formatRelative } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { useScope } from '@/lib/scope';
 
 type Tab = 'orgs' | 'workspaces' | 'members' | 'audit';
 
@@ -367,11 +368,17 @@ interface AuditEntry {
 
 function MembersTab() {
   const qc = useQueryClient();
+  const scope = useScope();
   const { data: members = [], isLoading } = useAdminMembers();
   const { data: orgs = [] } = useAdminOrgList();
 
   const [query, setQuery] = useState('');
-  const [orgFilter, setOrgFilter] = useState<'all' | string>('all');
+  // Default the org filter to the top-bar scope, but allow override.
+  // Re-sync if the top-bar scope changes.
+  const [orgFilter, setOrgFilter] = useState<'all' | string>(scope.orgId ?? 'all');
+  useEffect(() => {
+    setOrgFilter(scope.orgId ?? 'all');
+  }, [scope.orgId]);
   const [movingMember, setMovingMember] = useState<MemberRow | null>(null);
 
   const filtered = useMemo(() => {

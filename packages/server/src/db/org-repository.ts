@@ -183,9 +183,9 @@ export function updateOrganization(id: string, patch: { name?: string }): Organi
 }
 
 /**
- * Delete an org. Refuses if there are active members or any usage_entries
- * stamped with this org. Workspaces inside the org are deleted first
- * (also empty).
+ * Delete an org. Refuses if there are active members, pending invitations,
+ * or any usage_entries stamped with this org. Workspaces inside the org
+ * are deleted first (also empty).
  */
 export function deleteOrganization(id: string): { ok: boolean; reason?: string } {
   const raw = getRawDb();
@@ -194,6 +194,13 @@ export function deleteOrganization(id: string): { ok: boolean; reason?: string }
   ).get(id) as { c: number };
   if (activeMembers.c > 0) {
     return { ok: false, reason: `Org has ${activeMembers.c} active member(s). Move them out first.` };
+  }
+  const pendingInvites = raw.prepare(
+    `SELECT COUNT(*) as c FROM invitations
+     WHERE org_id = ? AND accepted_at IS NULL AND expires_at >= datetime('now')`,
+  ).get(id) as { c: number };
+  if (pendingInvites.c > 0) {
+    return { ok: false, reason: `Org has ${pendingInvites.c} pending invitation(s). Revoke them first.` };
   }
   const entries = raw.prepare(`SELECT COUNT(*) as c FROM usage_entries WHERE organization_id = ?`).get(id) as { c: number };
   if (entries.c > 0) {
@@ -251,6 +258,13 @@ export function deleteWorkspace(id: string): { ok: boolean; reason?: string } {
   ).get(id) as { c: number };
   if (activeMembers.c > 0) {
     return { ok: false, reason: `Workspace has ${activeMembers.c} active member(s). Move them out first.` };
+  }
+  const pendingInvites = raw.prepare(
+    `SELECT COUNT(*) as c FROM invitations
+     WHERE workspace_id = ? AND accepted_at IS NULL AND expires_at >= datetime('now')`,
+  ).get(id) as { c: number };
+  if (pendingInvites.c > 0) {
+    return { ok: false, reason: `Workspace has ${pendingInvites.c} pending invitation(s). Revoke them first.` };
   }
   const entries = raw.prepare(`SELECT COUNT(*) as c FROM usage_entries WHERE workspace_id = ?`).get(id) as { c: number };
   if (entries.c > 0) {

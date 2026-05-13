@@ -99,20 +99,30 @@ invitations.post('/', async (c) => {
   return c.json({ id, email: body.email, inviteUrl, expiresAt, role, orgId, workspaceId }, 201);
 });
 
-/** GET /api/v1/admin/invitations — list all invitations */
+/** GET /api/v1/admin/invitations — list all invitations, optionally filtered by org/workspace */
 invitations.get('/', (c) => {
+  const orgId = c.req.query('orgId');
+  const workspaceId = c.req.query('workspaceId');
   const rows = listInvitations();
   return c.json(
-    rows.map((r) => ({
-      id: r.id,
-      email: r.email,
-      invitedBy: r.invited_by,
-      createdAt: r.created_at,
-      expiresAt: r.expires_at,
-      acceptedAt: r.accepted_at,
-      role: r.role ?? 'developer',
-      status: r.accepted_at ? 'accepted' : new Date(r.expires_at) < new Date() ? 'expired' : 'pending',
-    })),
+    rows
+      .filter((r) => {
+        if (orgId && r.org_id !== orgId) return false;
+        if (workspaceId && r.workspace_id !== workspaceId) return false;
+        return true;
+      })
+      .map((r) => ({
+        id: r.id,
+        email: r.email,
+        invitedBy: r.invited_by,
+        createdAt: r.created_at,
+        expiresAt: r.expires_at,
+        acceptedAt: r.accepted_at,
+        role: r.role ?? 'developer',
+        orgId: r.org_id ?? null,
+        workspaceId: r.workspace_id ?? null,
+        status: r.accepted_at ? 'accepted' : new Date(r.expires_at) < new Date() ? 'expired' : 'pending',
+      })),
   );
 });
 

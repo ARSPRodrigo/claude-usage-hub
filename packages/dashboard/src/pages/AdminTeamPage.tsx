@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, apiDelete, getUser } from '@/api/client';
 import { Plus, Copy, Trash2 } from 'lucide-react';
 import { useOrgList, useWorkspaceList } from '@/api/hooks';
+import { useScope } from '@/lib/scope';
 
 interface Invitation {
   id: string;
@@ -62,12 +63,23 @@ function expiresIn(ts: string): string {
 export function AdminTeamPage() {
   const qc = useQueryClient();
   const currentUser = getUser();
+  const scope = useScope();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'developer' | 'owner'>('developer');
-  const [inviteOrgId, setInviteOrgId] = useState<string>('default');
-  const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string>('default-ws');
+  // Invite form defaults: prefer the top-bar scope, fall back to default org/ws.
+  const [inviteOrgId, setInviteOrgId] = useState<string>(scope.orgId ?? 'default');
+  const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string>(scope.workspaceId ?? 'default-ws');
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Sync the invite form to the top-bar scope when the user changes scope —
+  // unless they've already started typing or manually overridden.
+  useEffect(() => {
+    if (scope.orgId) setInviteOrgId(scope.orgId);
+  }, [scope.orgId]);
+  useEffect(() => {
+    if (scope.workspaceId) setInviteWorkspaceId(scope.workspaceId);
+  }, [scope.workspaceId]);
 
   const { data: orgs = [] } = useOrgList();
   const { data: workspacesForInvite = [] } = useWorkspaceList(inviteOrgId);
@@ -86,13 +98,19 @@ export function AdminTeamPage() {
   }, [workspacesForInvite, inviteWorkspaceId]);
 
   const { data: invitations = [] } = useQuery({
-    queryKey: ['admin-invitations'],
-    queryFn: () => apiGet<Invitation[]>('/api/v1/admin/invitations'),
+    queryKey: ['admin-invitations', scope.orgId, scope.workspaceId],
+    queryFn: () => apiGet<Invitation[]>('/api/v1/admin/invitations', {
+      ...(scope.orgId ? { orgId: scope.orgId } : {}),
+      ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
+    }),
   });
 
   const { data: members = [] } = useQuery({
-    queryKey: ['admin-members'],
-    queryFn: () => apiGet<Member[]>('/api/v1/admin/developers'),
+    queryKey: ['admin-members', scope.orgId, scope.workspaceId],
+    queryFn: () => apiGet<Member[]>('/api/v1/admin/members', {
+      ...(scope.orgId ? { orgId: scope.orgId } : {}),
+      ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
+    }),
   });
 
   const createInvite = useMutation({
@@ -127,6 +145,12 @@ export function AdminTeamPage() {
   };
 
   const pendingInvites = invitations.filter((inv) => inv.status === 'pending');
+  const activeOrg = orgs.find((o) => o.id === scope.orgId);
+  const scopeLabel = scope.orgId
+    ? scope.workspaceId
+      ? `${activeOrg?.name ?? '…'} / workspace ${scope.workspaceId}`
+      : (activeOrg?.name ?? scope.orgId)
+    : 'All organizations';
 
   return (
     <div>
@@ -134,7 +158,9 @@ export function AdminTeamPage() {
       <div className="mb-6">
         <div className="label mb-2">ORGANIZATION</div>
         <h1 className="text-title m-0" style={{ fontSize: 36, lineHeight: 1.05 }}>Team</h1>
-        <div className="text-ink-3 mt-2 text-sm">Invites, roles and API keys.</div>
+        <div className="text-ink-3 mt-2 text-sm">
+          Invites, roles and API keys for <span className="text-ink font-medium">{scopeLabel}</span>.
+        </div>
       </div>
 
       {/* Pending invites card */}

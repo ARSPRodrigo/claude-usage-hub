@@ -465,25 +465,39 @@ admin.delete('/workspaces/:id', (c) => {
 
 /**
  * GET /api/v1/admin/members
- *   List all users with their current org/workspace.
- *   Used by the Manage > Members tab.
+ *   List all users with their current org/workspace, optionally filtered
+ *   by active org/workspace from the top-bar scope.
+ *
+ *   ?orgId=…&workspaceId=… filters to members whose ACTIVE memberships
+ *   match. Members with no active membership are only shown when no
+ *   filter is provided.
  */
 admin.get('/members', (c) => {
+  const orgId = c.req.query('orgId');
+  const workspaceId = c.req.query('workspaceId');
   const users = listUsers();
-  return c.json(users.map((u) => {
-    const org = getActiveOrgMembership(u.id);
-    const ws = getActiveWorkspaceMembership(u.id);
-    return {
-      id: u.id,
-      email: u.email,
-      displayName: u.display_name,
-      role: u.role,
-      developerId: u.developer_id,
-      createdAt: u.created_at,
-      currentOrgId: org?.orgId ?? null,
-      currentWorkspaceId: ws?.workspaceId ?? null,
-    };
-  }));
+  return c.json(
+    users
+      .map((u) => {
+        const org = getActiveOrgMembership(u.id);
+        const ws = getActiveWorkspaceMembership(u.id);
+        return {
+          id: u.id,
+          email: u.email,
+          displayName: u.display_name,
+          role: u.role,
+          developerId: u.developer_id,
+          createdAt: u.created_at,
+          currentOrgId: org?.orgId ?? null,
+          currentWorkspaceId: ws?.workspaceId ?? null,
+        };
+      })
+      .filter((m) => {
+        if (orgId && m.currentOrgId !== orgId) return false;
+        if (workspaceId && m.currentWorkspaceId !== workspaceId) return false;
+        return true;
+      }),
+  );
 });
 
 /**
