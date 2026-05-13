@@ -54,7 +54,8 @@ invitations.post('/', async (c) => {
     return c.json({ error: 'email is too long' }, 400);
   }
 
-  const role = body.role === 'owner' ? 'owner' : 'developer';
+  // Accept legacy 'owner' and new 'platform_admin'; normalise to new vocabulary.
+  const role = (body.role === 'owner' || body.role === 'platform_admin') ? 'platform_admin' : 'developer';
 
   // Check if already a registered user
   const existingUser = findUserByEmail(body.email);

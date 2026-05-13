@@ -78,21 +78,25 @@ admin.patch('/developers/:id/role', async (c) => {
   const targetId = c.req.param('id');
   const body = await c.req.json() as { role?: string };
 
-  if (!body.role || !['owner', 'developer'].includes(body.role)) {
-    return c.json({ error: 'Invalid role. Must be "owner" or "developer".' }, 400);
+  // Accept both new and legacy role names so the UI can keep using either during rollout.
+  const validRoles = ['platform_admin', 'developer', 'owner'];
+  if (!body.role || !validRoles.includes(body.role)) {
+    return c.json({ error: 'Invalid role. Must be "platform_admin" or "developer".' }, 400);
   }
+  // Normalise legacy "owner" → "platform_admin".
+  const normalisedRole = body.role === 'owner' ? 'platform_admin' : body.role;
 
   const target = findUserById(targetId);
   if (!target) {
     return c.json({ error: 'User not found' }, 404);
   }
 
-  // Cannot change a primary_owner's role
-  if (target.role === 'primary_owner') {
-    return c.json({ error: 'Cannot change the role of a primary owner.' }, 403);
+  // Cannot change the platform owner's role (legacy primary_owner also blocked).
+  if (target.role === 'platform_owner' || target.role === 'primary_owner') {
+    return c.json({ error: 'Cannot change the role of the platform owner.' }, 403);
   }
 
-  const updated = updateUserRole(targetId, body.role);
+  const updated = updateUserRole(targetId, normalisedRole);
   if (!updated) {
     return c.json({ error: 'Failed to update role' }, 500);
   }

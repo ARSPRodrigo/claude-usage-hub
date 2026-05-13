@@ -1,8 +1,14 @@
 import type { Next } from 'hono';
 import { sign, verify } from 'hono/utils/jwt/jwt';
 import type { AuthContext, UserRole } from '@claude-usage-hub/shared';
-import { JWT_EXPIRATION_SECONDS, isAdminRole } from '@claude-usage-hub/shared';
+import { JWT_EXPIRATION_SECONDS, isPlatformAdminRole, isPlatformOwnerRole } from '@claude-usage-hub/shared';
 import { findApiKeyByHash, findUserById, updateApiKeyLastUsed } from '../db/auth-repository.js';
+import {
+  getActiveOrgMembership,
+  getActiveWorkspaceMembership,
+  listOwnedOrgIds,
+  listOwnedWorkspaceIds,
+} from '../db/org-repository.js';
 import { hashApiKey } from '../services/auth-utils.js';
 import type { AppEnv } from '../env.js';
 
@@ -58,6 +64,23 @@ export async function signJwt(user: {
 }
 
 /**
+ * Enrich an AuthContext with active org/workspace membership + owned scopes.
+ * Looked up per-request rather than baked into the JWT — keeps tokens valid
+ * across membership changes.
+ */
+function enrichAuth(auth: AuthContext): AuthContext {
+  const orgMembership = getActiveOrgMembership(auth.userId);
+  const wsMembership = getActiveWorkspaceMembership(auth.userId);
+  return {
+    ...auth,
+    activeOrgId: orgMembership?.orgId ?? null,
+    activeWorkspaceId: wsMembership?.workspaceId ?? null,
+    ownedOrgIds: listOwnedOrgIds(auth.userId),
+    ownedWorkspaceIds: listOwnedWorkspaceIds(auth.userId),
+  };
+}
+
+/**
  * API key authentication middleware.
  * Reads X-API-Key header, validates against database.
  */
@@ -78,14 +101,14 @@ export async function apiKeyAuth(c: Context, next: Next): Promise<void | Respons
 
   // Look up the user to get their role and email
   const user = findUserById(apiKey.user_id);
-  const auth: AuthContext = {
+  const baseAuth: AuthContext = {
     userId: apiKey.user_id,
     email: user?.email ?? '',
     role: (user?.role as UserRole) ?? 'developer',
     developerId: apiKey.developer_id,
     apiKeyId: apiKey.id,
   };
-  c.set('auth', auth);
+  c.set('auth', enrichAuth(baseAuth));
   await next();
 }
 
@@ -114,13 +137,14 @@ export async function jwtAuth(c: Context, next: Next): Promise<void | Response> 
       return c.json({ error: 'User no longer exists' }, 401);
     }
 
-    const auth: AuthContext = {
+    const baseAuth: AuthContext = {
       userId: payload.sub,
       email: payload.email,
-      role: payload.role,
+      // Prefer DB role over JWT role — caters to role changes since token issuance.
+      role: (user.role as UserRole) ?? payload.role,
       developerId: payload.developerId,
     };
-    c.set('auth', auth);
+    c.set('auth', enrichAuth(baseAuth));
     await next();
   } catch {
     return c.json({ error: 'Invalid or expired token' }, 401);
@@ -128,23 +152,30 @@ export async function jwtAuth(c: Context, next: Next): Promise<void | Response> 
 }
 
 /**
- * Admin-only guard (primary_owner or owner). Must be used after jwtAuth.
+ * Platform-admin guard (platform_owner or platform_admin; legacy primary_owner/owner accepted).
+ * Must be used after jwtAuth.
  */
-export async function requireAdmin(c: Context, next: Next): Promise<void | Response> {
+export async function requirePlatformAdmin(c: Context, next: Next): Promise<void | Response> {
   const auth = c.get('auth') as AuthContext | undefined;
-  if (!auth || !isAdminRole(auth.role)) {
-    return c.json({ error: 'Admin access required' }, 403);
+  if (!auth || !isPlatformAdminRole(auth.role)) {
+    return c.json({ error: 'Platform admin access required' }, 403);
   }
   await next();
 }
 
 /**
- * Primary owner guard. Must be used after jwtAuth.
+ * Platform-owner guard (the singular owner; legacy primary_owner accepted).
+ * Must be used after jwtAuth.
  */
-export async function requirePrimaryOwner(c: Context, next: Next): Promise<void | Response> {
+export async function requirePlatformOwner(c: Context, next: Next): Promise<void | Response> {
   const auth = c.get('auth') as AuthContext | undefined;
-  if (!auth || auth.role !== 'primary_owner') {
-    return c.json({ error: 'Primary owner access required' }, 403);
+  if (!auth || !isPlatformOwnerRole(auth.role)) {
+    return c.json({ error: 'Platform owner access required' }, 403);
   }
   await next();
 }
+
+/** @deprecated Use requirePlatformAdmin. Retained for callers mid-migration. */
+export const requireAdmin = requirePlatformAdmin;
+/** @deprecated Use requirePlatformOwner. */
+export const requirePrimaryOwner = requirePlatformOwner;

@@ -81,10 +81,41 @@ export function insertEntries(entries: EnrichedEntry[], apiKeyId?: string): numb
     INSERT OR IGNORE INTO usage_entries
       (session_id, message_id, request_id, timestamp, model,
        input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-       service_tier, developer_id, project_alias, cost_usd, api_key_id)
+       service_tier, developer_id, project_alias, cost_usd, api_key_id,
+       organization_id, workspace_id)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+
+  // Cache per-developer active memberships for the duration of this batch —
+  // amortizes the lookup when many entries belong to the same user.
+  const orgCache = new Map<string, string | null>();
+  const wsCache = new Map<string, string | null>();
+  const lookupOrg = raw.prepare(`
+    SELECT org_id FROM org_memberships
+    WHERE user_id = (SELECT id FROM users WHERE developer_id = ?) AND valid_to IS NULL
+    ORDER BY valid_from DESC LIMIT 1
+  `);
+  const lookupWs = raw.prepare(`
+    SELECT workspace_id FROM workspace_memberships
+    WHERE user_id = (SELECT id FROM users WHERE developer_id = ?) AND valid_to IS NULL
+    ORDER BY valid_from DESC LIMIT 1
+  `);
+
+  function resolveOrg(developerId: string): string | null {
+    if (orgCache.has(developerId)) return orgCache.get(developerId)!;
+    const row = lookupOrg.get(developerId) as { org_id: string } | undefined;
+    const v = row?.org_id ?? null;
+    orgCache.set(developerId, v);
+    return v;
+  }
+  function resolveWs(developerId: string): string | null {
+    if (wsCache.has(developerId)) return wsCache.get(developerId)!;
+    const row = lookupWs.get(developerId) as { workspace_id: string } | undefined;
+    const v = row?.workspace_id ?? null;
+    wsCache.set(developerId, v);
+    return v;
+  }
 
   let inserted = 0;
   const transaction = raw.transaction(() => {
@@ -104,6 +135,8 @@ export function insertEntries(entries: EnrichedEntry[], apiKeyId?: string): numb
         e.projectAlias,
         e.costUsd,
         apiKeyId ?? null,
+        resolveOrg(e.developerId),
+        resolveWs(e.developerId),
       );
       inserted += result.changes;
     }
