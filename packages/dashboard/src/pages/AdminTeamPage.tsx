@@ -231,14 +231,14 @@ export function AdminTeamPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {m.role !== 'primary_owner' && m.id !== currentUser?.id && (
+                {m.role !== 'platform_owner' && m.role !== 'primary_owner' && m.id !== currentUser?.id && (
                   <select
-                    value={m.role}
+                    value={m.role === 'owner' ? 'platform_admin' : m.role}
                     onChange={(e) => changeRole.mutate({ id: m.id, role: e.target.value })}
                     className="mono text-[10.5px] px-2 py-1 rounded-pill border border-line bg-surface text-ink"
                     style={{ letterSpacing: '0.04em' }}
                   >
-                    <option value="owner">Owner</option>
+                    <option value="platform_admin">Admin</option>
                     <option value="developer">Developer</option>
                   </select>
                 )}
@@ -246,7 +246,9 @@ export function AdminTeamPage() {
                   className="mono text-[10.5px] px-2 py-0.5 rounded-pill border border-line text-ink-2"
                   style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}
                 >
-                  {m.role === 'primary_owner' ? 'Primary' : m.role}
+                  {m.role === 'platform_owner' || m.role === 'primary_owner' ? 'Owner' :
+                   m.role === 'platform_admin' || m.role === 'owner' ? 'Admin' :
+                   m.role}
                 </span>
               </div>
             </div>

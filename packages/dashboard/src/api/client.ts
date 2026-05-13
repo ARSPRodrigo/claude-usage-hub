@@ -11,6 +11,14 @@ export interface StoredUser {
   developerId: string;
 }
 
+/** Role helpers — legacy-tolerant. Mirror server-side isPlatformAdminRole. */
+export function isPlatformAdmin(role: string | undefined): boolean {
+  return role === 'platform_owner' || role === 'platform_admin' || role === 'primary_owner' || role === 'owner';
+}
+export function isPlatformOwner(role: string | undefined): boolean {
+  return role === 'platform_owner' || role === 'primary_owner';
+}
+
 export function getUser(): StoredUser | null {
   const raw = localStorage.getItem(USER_KEY);
   if (!raw) return null;

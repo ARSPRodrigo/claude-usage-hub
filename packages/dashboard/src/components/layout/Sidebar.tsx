@@ -6,7 +6,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
-import { getUser, clearAuth } from '@/api/client';
+import { getUser, clearAuth, isPlatformAdmin } from '@/api/client';
 
 type Page = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'admin-manage' | 'settings' | 'developer-detail' | 'help';
 
@@ -18,15 +18,17 @@ interface SidebarProps {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  primary_owner: 'Primary Owner',
-  owner: 'Owner',
+  platform_owner: 'Platform Owner',
+  platform_admin: 'Platform Admin',
+  primary_owner: 'Platform Owner', // legacy
+  owner: 'Platform Admin',          // legacy
   developer: 'Developer',
 };
 
 export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps) {
   const health = useHealth();
   const user = getUser();
-  const isAdmin = user?.role === 'primary_owner' || user?.role === 'owner';
+  const isAdmin = isPlatformAdmin(user?.role);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);

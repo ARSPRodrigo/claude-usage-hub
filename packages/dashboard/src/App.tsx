@@ -16,7 +16,7 @@ import { DeveloperDetailPage } from '@/pages/DeveloperDetailPage';
 import { HelpPage } from '@/pages/HelpPage';
 import { CostComparisonPage } from '@/pages/CostComparisonPage';
 import { ManagePage } from '@/pages/ManagePage';
-import { getToken, getUser } from '@/api/client';
+import { apiGet, getToken, getUser, setUser } from '@/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 
 export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'admin-manage' | 'settings' | 'developer-detail' | 'help';
@@ -78,6 +78,25 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark);
     localStorage.setItem('theme', dark ? 'dark' : 'light');
   }, [dark]);
+
+  // Refresh role/displayName from the server on mount so legacy values
+  // (e.g. primary_owner cached in localStorage) get the canonical platform_*
+  // values without forcing a re-login.
+  useEffect(() => {
+    if (!getToken() || !getUser()) return;
+    apiGet<{ id: string; email: string; displayName: string; role: string; developerId: string }>(
+      '/auth/me',
+    )
+      .then((fresh) => {
+        const current = getUser();
+        if (current && (current.role !== fresh.role || current.displayName !== fresh.displayName)) {
+          setUser({ ...current, role: fresh.role as typeof current.role, displayName: fresh.displayName });
+          // Force re-render by toggling state.
+          setPathname((p) => p);
+        }
+      })
+      .catch(() => { /* ignore — 401 is handled by apiGet */ });
+  }, []);
 
   useEffect(() => {
     const handler = () => {

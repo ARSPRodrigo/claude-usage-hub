@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiDelete, getUser } from '@/api/client';
+import { apiGet, apiDelete, getUser, isPlatformAdmin } from '@/api/client';
 import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import { formatTokens, formatCost, formatRelative } from '@/lib/utils';
@@ -39,15 +39,17 @@ function HBar({ value, max, color, height = 4 }: { value: number; max: number; c
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  primary_owner: 'Primary',
-  owner: 'Owner',
+  platform_owner: 'Owner',
+  platform_admin: 'Admin',
+  primary_owner: 'Owner',  // legacy
+  owner: 'Admin',           // legacy
   developer: 'Dev',
 };
 
 export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
   const qc = useQueryClient();
   const currentUser = getUser();
-  const isOwner = currentUser?.role === 'primary_owner' || currentUser?.role === 'owner';
+  const isOwner = isPlatformAdmin(currentUser?.role);
   const [range, setRange] = useState<TimeRange>('7d');
   const [wipingId, setWipingId] = useState<string | null>(null);
   const scope = useScope();

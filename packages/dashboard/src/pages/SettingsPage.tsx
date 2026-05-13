@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { getUser } from '@/api/client';
+import { getUser, isPlatformAdmin } from '@/api/client';
 import { useAdminSettings } from '@/api/hooks';
 
 async function apiPatch<T>(path: string, body: unknown): Promise<T> {
@@ -40,7 +40,7 @@ const RETENTION_OPTIONS = [30, 60, 90, 180, 365];
 export function SettingsPage() {
   const user = getUser();
   const qc = useQueryClient();
-  const isOwner = user?.role === 'primary_owner' || user?.role === 'owner';
+  const isOwner = isPlatformAdmin(user?.role);
   const [wipeConfirm, setWipeConfirm] = useState(false);
 
   const settings = useAdminSettings();

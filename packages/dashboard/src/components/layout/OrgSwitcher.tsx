@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Building2, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getUser } from '@/api/client';
+import { getUser, isPlatformAdmin } from '@/api/client';
 import { useOrgList, useWorkspaceList } from '@/api/hooks';
 import { useScope, setScope } from '@/lib/scope';
 
@@ -16,9 +16,7 @@ export function OrgSwitcher() {
   const user = getUser();
   const scope = useScope();
 
-  const isPlatform =
-    user?.role === 'platform_owner' || user?.role === 'platform_admin' ||
-    user?.role === 'primary_owner' || user?.role === 'owner';
+  const isPlatform = isPlatformAdmin(user?.role);
 
   const { data: orgs = [] } = useOrgList();
   const { data: workspaces = [] } = useWorkspaceList(scope.orgId ?? null);

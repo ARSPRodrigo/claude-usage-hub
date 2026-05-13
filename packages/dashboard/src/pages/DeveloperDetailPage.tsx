@@ -5,7 +5,7 @@ import { TokenChart } from '@/components/dashboard/TokenChart';
 import { ModelMixChart } from '@/components/dashboard/ModelMixChart';
 import { useDeveloperStats, useDeveloperTimeseries } from '@/api/hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiDelete, getUser } from '@/api/client';
+import { apiGet, apiDelete, getUser, isPlatformAdmin } from '@/api/client';
 import { formatTokens, formatCost } from '@/lib/utils';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
@@ -37,7 +37,7 @@ interface DeveloperDetailPageProps {
 export function DeveloperDetailPage({ developerId, displayName, onBack }: DeveloperDetailPageProps) {
   const qc = useQueryClient();
   const currentUser = getUser();
-  const isOwner = currentUser?.role === 'primary_owner' || currentUser?.role === 'owner';
+  const isOwner = isPlatformAdmin(currentUser?.role);
   const [range, setRange] = useState<TimeRange>('7d');
   const [wipingMachineId, setWipingMachineId] = useState<string | null>(null);
 
