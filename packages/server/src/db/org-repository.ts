@@ -142,6 +142,175 @@ export interface DomainRule {
   workspaceId: string;
 }
 
+// ---------------------------------------------------------------------------
+// CRUD: organizations
+// ---------------------------------------------------------------------------
+
+/** Slugify "ACME Engineering" → "acme-engineering". */
+export function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64) || 'org';
+}
+
+function uniqueOrgSlug(base: string): string {
+  const raw = getRawDb();
+  let slug = base;
+  let n = 1;
+  while (raw.prepare(`SELECT 1 FROM organizations WHERE slug = ?`).get(slug)) {
+    n += 1;
+    slug = `${base}-${n}`;
+  }
+  return slug;
+}
+
+export function createOrganization(args: { id: string; name: string }): Organization {
+  const raw = getRawDb();
+  const slug = uniqueOrgSlug(slugify(args.name));
+  raw.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, ?, ?)`).run(args.id, args.name, slug);
+  return { id: args.id, name: args.name, slug, createdAt: new Date().toISOString() };
+}
+
+export function updateOrganization(id: string, patch: { name?: string }): Organization | null {
+  const raw = getRawDb();
+  if (patch.name !== undefined) {
+    raw.prepare(`UPDATE organizations SET name = ? WHERE id = ?`).run(patch.name, id);
+  }
+  return findOrganizationById(id);
+}
+
+/**
+ * Delete an org. Refuses if there are active members or any usage_entries
+ * stamped with this org. Workspaces inside the org are deleted first
+ * (also empty).
+ */
+export function deleteOrganization(id: string): { ok: boolean; reason?: string } {
+  const raw = getRawDb();
+  const activeMembers = raw.prepare(
+    `SELECT COUNT(*) as c FROM org_memberships WHERE org_id = ? AND valid_to IS NULL`,
+  ).get(id) as { c: number };
+  if (activeMembers.c > 0) {
+    return { ok: false, reason: `Org has ${activeMembers.c} active member(s). Move them out first.` };
+  }
+  const entries = raw.prepare(`SELECT COUNT(*) as c FROM usage_entries WHERE organization_id = ?`).get(id) as { c: number };
+  if (entries.c > 0) {
+    return { ok: false, reason: `Org has ${entries.c} historical usage entries. Cannot be deleted to preserve audit trail.` };
+  }
+
+  raw.transaction(() => {
+    raw.prepare(`DELETE FROM workspace_owners WHERE workspace_id IN (SELECT id FROM workspaces WHERE org_id = ?)`).run(id);
+    raw.prepare(`DELETE FROM workspace_memberships WHERE workspace_id IN (SELECT id FROM workspaces WHERE org_id = ?)`).run(id);
+    raw.prepare(`DELETE FROM workspaces WHERE org_id = ?`).run(id);
+    raw.prepare(`DELETE FROM domain_rules WHERE org_id = ?`).run(id);
+    raw.prepare(`DELETE FROM org_owners WHERE org_id = ?`).run(id);
+    raw.prepare(`DELETE FROM org_memberships WHERE org_id = ?`).run(id);
+    raw.prepare(`DELETE FROM organizations WHERE id = ?`).run(id);
+  })();
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// CRUD: workspaces
+// ---------------------------------------------------------------------------
+
+function uniqueWorkspaceSlug(orgId: string, base: string): string {
+  const raw = getRawDb();
+  let slug = base;
+  let n = 1;
+  while (raw.prepare(`SELECT 1 FROM workspaces WHERE org_id = ? AND slug = ?`).get(orgId, slug)) {
+    n += 1;
+    slug = `${base}-${n}`;
+  }
+  return slug;
+}
+
+export function createWorkspace(args: { id: string; orgId: string; name: string }): Workspace {
+  const raw = getRawDb();
+  const slug = uniqueWorkspaceSlug(args.orgId, slugify(args.name));
+  raw.prepare(`INSERT INTO workspaces (id, org_id, name, slug) VALUES (?, ?, ?, ?)`).run(
+    args.id, args.orgId, args.name, slug,
+  );
+  return { id: args.id, orgId: args.orgId, name: args.name, slug, createdAt: new Date().toISOString() };
+}
+
+export function updateWorkspace(id: string, patch: { name?: string }): Workspace | null {
+  const raw = getRawDb();
+  if (patch.name !== undefined) {
+    raw.prepare(`UPDATE workspaces SET name = ? WHERE id = ?`).run(patch.name, id);
+  }
+  return findWorkspaceById(id);
+}
+
+export function deleteWorkspace(id: string): { ok: boolean; reason?: string } {
+  const raw = getRawDb();
+  const activeMembers = raw.prepare(
+    `SELECT COUNT(*) as c FROM workspace_memberships WHERE workspace_id = ? AND valid_to IS NULL`,
+  ).get(id) as { c: number };
+  if (activeMembers.c > 0) {
+    return { ok: false, reason: `Workspace has ${activeMembers.c} active member(s). Move them out first.` };
+  }
+  const entries = raw.prepare(`SELECT COUNT(*) as c FROM usage_entries WHERE workspace_id = ?`).get(id) as { c: number };
+  if (entries.c > 0) {
+    return { ok: false, reason: `Workspace has ${entries.c} historical usage entries. Cannot be deleted to preserve audit trail.` };
+  }
+
+  raw.transaction(() => {
+    raw.prepare(`DELETE FROM workspace_owners WHERE workspace_id = ?`).run(id);
+    raw.prepare(`DELETE FROM workspace_memberships WHERE workspace_id = ?`).run(id);
+    raw.prepare(`DELETE FROM domain_rules WHERE workspace_id = ?`).run(id);
+    raw.prepare(`DELETE FROM workspaces WHERE id = ?`).run(id);
+  })();
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+export interface RoleAuditEntry {
+  id: string;
+  actorId: string;
+  targetId: string;
+  action: string;
+  scopeId: string | null;
+  scopeType: 'org' | 'workspace' | null;
+  timestamp: string;
+}
+
+export function writeAudit(args: {
+  id: string;
+  actorId: string;
+  targetId: string;
+  action: string;
+  scopeId?: string | null;
+  scopeType?: 'org' | 'workspace' | null;
+}): void {
+  const raw = getRawDb();
+  raw.prepare(`
+    INSERT INTO role_audit (id, actor_id, target_id, action, scope_id, scope_type)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(args.id, args.actorId, args.targetId, args.action, args.scopeId ?? null, args.scopeType ?? null);
+}
+
+export function listRoleAudit(limit: number = 100): RoleAuditEntry[] {
+  const raw = getRawDb();
+  const rows = raw.prepare(`
+    SELECT id, actor_id, target_id, action, scope_id, scope_type, timestamp
+    FROM role_audit ORDER BY timestamp DESC LIMIT ?
+  `).all(limit) as Array<{
+    id: string; actor_id: string; target_id: string; action: string;
+    scope_id: string | null; scope_type: string | null; timestamp: string;
+  }>;
+  return rows.map((r) => ({
+    id: r.id, actorId: r.actor_id, targetId: r.target_id, action: r.action,
+    scopeId: r.scope_id, scopeType: (r.scope_type as 'org' | 'workspace' | null) ?? null,
+    timestamp: r.timestamp,
+  }));
+}
+
 export function findDomainRuleForEmail(email: string): DomainRule | null {
   const domain = email.split('@')[1]?.toLowerCase();
   if (!domain) return null;

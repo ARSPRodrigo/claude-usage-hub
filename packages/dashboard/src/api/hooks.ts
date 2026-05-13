@@ -211,6 +211,25 @@ export function useWorkspaceList(orgId: string | null | undefined) {
   });
 }
 
+/** Full org list for the Manage page — Platform Admin only (uses /admin route). */
+export function useAdminOrgList() {
+  return useQuery({
+    queryKey: ['admin-orgs'],
+    queryFn: () => apiGet<OrgRow[]>('/api/v1/admin/organizations'),
+    staleTime: 30_000,
+  });
+}
+
+/** Workspaces in an org — Platform Admin only. */
+export function useAdminWorkspaceList(orgId: string | null) {
+  return useQuery({
+    queryKey: ['admin-workspaces', orgId],
+    queryFn: () => apiGet<WorkspaceRow[]>(`/api/v1/admin/organizations/${orgId}/workspaces`),
+    staleTime: 30_000,
+    enabled: !!orgId,
+  });
+}
+
 export function useProjects(range: TimeRange) {
   return useQuery({
     queryKey: ['projects', range],

@@ -1,5 +1,5 @@
 import {
-  BarChart3, FolderOpen, Clock, Scale, Building2, Users,
+  BarChart3, FolderOpen, Clock, Scale, Building2, Users, Sliders,
   ChevronUp, User, Settings, LogOut,
   Gauge, HelpCircle,
 } from 'lucide-react';
@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
 import { getUser, clearAuth } from '@/api/client';
 
-type Page = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'settings' | 'developer-detail' | 'help';
+type Page = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'admin-manage' | 'settings' | 'developer-detail' | 'help';
 
 interface SidebarProps {
   activePage: Page;
@@ -107,6 +107,7 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
               <NavItem id="admin-org" label="Overview" icon={Building2} extraActive="developer-detail" />
               <NavItem id="admin-team" label="Team" icon={Users} />
               <NavItem id="admin-cost-comparison" label="Cost Comparison" icon={Scale} />
+              <NavItem id="admin-manage" label="Manage" icon={Sliders} />
             </ul>
           </>
         )}

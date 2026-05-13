@@ -20,7 +20,20 @@ import {
 import { hashPassword, generateApiKey } from '../services/auth-utils.js';
 import { invitationRoutes } from './invitations.js';
 import { getDeveloperStats, getDashboardStats, getTokenTimeseries, getAggregateTokensByTier } from '../db/repository.js';
-import { listOrganizations, listWorkspaces, findOrganizationById, findWorkspaceById } from '../db/org-repository.js';
+import {
+  listOrganizations,
+  listWorkspaces,
+  findOrganizationById,
+  findWorkspaceById,
+  createOrganization,
+  updateOrganization,
+  deleteOrganization,
+  createWorkspace,
+  updateWorkspace,
+  deleteWorkspace,
+  writeAudit,
+  listRoleAudit,
+} from '../db/org-repository.js';
 import { requireAdmin, requirePrimaryOwner } from '../middleware/auth.js';
 
 const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
@@ -340,6 +353,116 @@ admin.get('/cost-comparison', (c) => {
       comparisons: sonnetComparisons,
     },
   });
+});
+
+// ── Organizations (Phase 3a) ─────────────────────────────────────────────
+
+/** GET /api/v1/admin/organizations — list all orgs (Platform admin sees all). */
+admin.get('/organizations', (c) => {
+  return c.json(listOrganizations());
+});
+
+/** POST /api/v1/admin/organizations — create. Body: { name } */
+admin.post('/organizations', async (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const body = await c.req.json() as { name?: string };
+  if (!body.name || !body.name.trim()) {
+    return c.json({ error: 'Name is required' }, 400);
+  }
+  const id = randomUUID();
+  const org = createOrganization({ id, name: body.name.trim() });
+  writeAudit({ id: randomUUID(), actorId: auth.userId, targetId: auth.userId, action: 'create_organization', scopeId: id, scopeType: 'org' });
+  return c.json(org, 201);
+});
+
+/** PATCH /api/v1/admin/organizations/:id — rename. Body: { name } */
+admin.patch('/organizations/:id', async (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const id = c.req.param('id');
+  const body = await c.req.json() as { name?: string };
+  if (!body.name || !body.name.trim()) {
+    return c.json({ error: 'Name is required' }, 400);
+  }
+  const org = updateOrganization(id, { name: body.name.trim() });
+  if (!org) return c.json({ error: 'Organization not found' }, 404);
+  writeAudit({ id: randomUUID(), actorId: auth.userId, targetId: auth.userId, action: 'rename_organization', scopeId: id, scopeType: 'org' });
+  return c.json(org);
+});
+
+/** DELETE /api/v1/admin/organizations/:id — delete (refuses if non-empty). */
+admin.delete('/organizations/:id', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const id = c.req.param('id');
+  if (id === 'default') {
+    return c.json({ error: 'Cannot delete the default organization' }, 400);
+  }
+  const result = deleteOrganization(id);
+  if (!result.ok) return c.json({ error: result.reason }, 409);
+  writeAudit({ id: randomUUID(), actorId: auth.userId, targetId: auth.userId, action: 'delete_organization', scopeId: id, scopeType: 'org' });
+  return c.json({ ok: true });
+});
+
+// ── Workspaces (Phase 3a) ────────────────────────────────────────────────
+
+/** GET /api/v1/admin/organizations/:orgId/workspaces — list workspaces in an org. */
+admin.get('/organizations/:orgId/workspaces', (c) => {
+  return c.json(listWorkspaces(c.req.param('orgId')));
+});
+
+/** POST /api/v1/admin/organizations/:orgId/workspaces — create. Body: { name } */
+admin.post('/organizations/:orgId/workspaces', async (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const orgId = c.req.param('orgId');
+  const org = findOrganizationById(orgId);
+  if (!org) return c.json({ error: 'Organization not found' }, 404);
+  const body = await c.req.json() as { name?: string };
+  if (!body.name || !body.name.trim()) {
+    return c.json({ error: 'Name is required' }, 400);
+  }
+  const id = randomUUID();
+  const ws = createWorkspace({ id, orgId, name: body.name.trim() });
+  writeAudit({ id: randomUUID(), actorId: auth.userId, targetId: auth.userId, action: 'create_workspace', scopeId: id, scopeType: 'workspace' });
+  return c.json(ws, 201);
+});
+
+/** PATCH /api/v1/admin/workspaces/:id — rename. Body: { name } */
+admin.patch('/workspaces/:id', async (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const id = c.req.param('id');
+  const body = await c.req.json() as { name?: string };
+  if (!body.name || !body.name.trim()) {
+    return c.json({ error: 'Name is required' }, 400);
+  }
+  const ws = updateWorkspace(id, { name: body.name.trim() });
+  if (!ws) return c.json({ error: 'Workspace not found' }, 404);
+  writeAudit({ id: randomUUID(), actorId: auth.userId, targetId: auth.userId, action: 'rename_workspace', scopeId: id, scopeType: 'workspace' });
+  return c.json(ws);
+});
+
+/** DELETE /api/v1/admin/workspaces/:id — delete (refuses if non-empty). */
+admin.delete('/workspaces/:id', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const id = c.req.param('id');
+  if (id === 'default-ws') {
+    return c.json({ error: 'Cannot delete the default workspace' }, 400);
+  }
+  const result = deleteWorkspace(id);
+  if (!result.ok) return c.json({ error: result.reason }, 409);
+  writeAudit({ id: randomUUID(), actorId: auth.userId, targetId: auth.userId, action: 'delete_workspace', scopeId: id, scopeType: 'workspace' });
+  return c.json({ ok: true });
+});
+
+// ── Audit log (Phase 3a stub; full UI in 3c) ─────────────────────────────
+
+admin.get('/role-audit', (c) => {
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 500);
+  return c.json(listRoleAudit(limit));
 });
 
 export { admin as adminRoutes };
