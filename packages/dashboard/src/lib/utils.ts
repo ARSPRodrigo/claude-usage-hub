@@ -35,7 +35,8 @@ export function truncateId(id: string, len: number = 8): string {
 }
 
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
+  // Use parseServerTimestamp to handle SQLite CURRENT_TIMESTAMP (UTC, no Z).
+  return new Date(parseServerTimestamp(iso)).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -43,8 +44,30 @@ export function formatDate(iso: string): string {
   });
 }
 
+/**
+ * Parse a server-provided timestamp as UTC.
+ *
+ * The server stores some columns via SQLite CURRENT_TIMESTAMP, which yields
+ * a format like `'2026-05-13 08:47:02'` — space-separated, no timezone
+ * marker. Browsers parse this as LOCAL time, which is wrong (SQLite's value
+ * is UTC). Detect that format and normalise to ISO 8601 with `Z`.
+ *
+ * Already-ISO timestamps (containing `T` or ending in `Z`) are passed
+ * through unchanged.
+ */
+export function parseServerTimestamp(ts: string | number): number {
+  if (typeof ts === 'number') return ts;
+  if (!ts) return Date.now();
+  // ISO 8601 already (has T or ends with Z or has timezone offset).
+  if (ts.includes('T') || ts.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(ts)) {
+    return new Date(ts).getTime();
+  }
+  // SQLite CURRENT_TIMESTAMP: 'YYYY-MM-DD HH:MM:SS' (UTC).
+  return Date.parse(ts.replace(' ', 'T') + 'Z');
+}
+
 export function formatRelative(ts: string | number): string {
-  const date = typeof ts === 'number' ? ts : new Date(ts).getTime();
+  const date = parseServerTimestamp(ts);
   const diff = (Date.now() - date) / 1000;
   if (diff < 60) return 'just now';
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
