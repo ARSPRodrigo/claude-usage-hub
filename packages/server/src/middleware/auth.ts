@@ -175,6 +175,24 @@ export async function requirePlatformOwner(c: Context, next: Next): Promise<void
   await next();
 }
 
+/**
+ * Mount-level guard for /api/v1/admin/*. Lets through:
+ *   - Platform admins / owners (full access)
+ *   - Any user with at least one org or workspace ownership grant
+ * Per-route guards (`requirePlatformAdmin`, `requirePlatformOwner`) and
+ * handler-level scope checks tighten access on individual endpoints.
+ */
+export async function requireAdminOrOwner(c: Context, next: Next): Promise<void | Response> {
+  const auth = c.get('auth') as AuthContext | undefined;
+  if (!auth) return c.json({ error: 'Auth required' }, 401);
+  const isAdmin = isPlatformAdminRole(auth.role);
+  const isOwner = (auth.ownedOrgIds?.length ?? 0) > 0 || (auth.ownedWorkspaceIds?.length ?? 0) > 0;
+  if (!isAdmin && !isOwner) {
+    return c.json({ error: 'Admin or owner access required' }, 403);
+  }
+  await next();
+}
+
 /** @deprecated Use requirePlatformAdmin. Retained for callers mid-migration. */
 export const requireAdmin = requirePlatformAdmin;
 /** @deprecated Use requirePlatformOwner. */

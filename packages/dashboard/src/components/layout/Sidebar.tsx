@@ -6,7 +6,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
-import { getUser, clearAuth, isPlatformAdmin } from '@/api/client';
+import { getUser, clearAuth, isPlatformAdmin, canManage } from '@/api/client';
 
 type Page =
   | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile'
@@ -33,6 +33,7 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
   const health = useHealth();
   const user = getUser();
   const isAdmin = isPlatformAdmin(user?.role);
+  const showManageSection = canManage(user);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -106,7 +107,7 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
           <NavItem id="cost-comparison" label="Cost Comparison" icon={Scale} />
         </ul>
 
-        {isAdmin && (
+        {showManageSection && (
           <>
             <div className="label px-1.5 pt-4.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>Organization</div>
             <ul className="flex flex-col gap-0.5">

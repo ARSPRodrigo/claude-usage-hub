@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, ArrowRight, Search, Shield, X } from 'lucide-react';
-import { apiGet, apiPost, apiDelete, getUser, isPlatformOwner } from '@/api/client';
+import { apiGet, apiPost, apiDelete, getUser, isPlatformOwner, isPlatformAdmin } from '@/api/client';
 import {
   useAdminOrgList,
   useAdminWorkspaceList,
@@ -60,6 +60,8 @@ export function ManagePage({ section }: { section: ManageSection }) {
 
 function OrgsTab() {
   const qc = useQueryClient();
+  const currentUser = getUser();
+  const canCreateOrDelete = isPlatformAdmin(currentUser?.role);
   const { data: orgs = [], isLoading } = useAdminOrgList();
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,32 +86,34 @@ function OrgsTab() {
 
   return (
     <div>
-      {/* Create card */}
-      <div className="rounded-card border border-line bg-surface mb-4 p-4">
-        <div className="text-[15px] font-medium mb-2.5">Create organization</div>
-        <div className="flex gap-2">
-          <input
-            value={newName}
-            onChange={(e) => { setNewName(e.target.value); setError(null); }}
-            placeholder="e.g. ACME Engineering"
-            className="flex-1 px-3 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none"
-            onKeyDown={(e) => { if (e.key === 'Enter' && newName.trim()) create.mutate(newName.trim()); }}
-          />
-          <button
-            onClick={() => { if (newName.trim()) create.mutate(newName.trim()); }}
-            disabled={!newName.trim() || create.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
-          >
-            <Plus className="h-3.5 w-3.5" /> Create
-          </button>
+      {/* Create card — platform admin only */}
+      {canCreateOrDelete && (
+        <div className="rounded-card border border-line bg-surface mb-4 p-4">
+          <div className="text-[15px] font-medium mb-2.5">Create organization</div>
+          <div className="flex gap-2">
+            <input
+              value={newName}
+              onChange={(e) => { setNewName(e.target.value); setError(null); }}
+              placeholder="e.g. ACME Engineering"
+              className="flex-1 px-3 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none"
+              onKeyDown={(e) => { if (e.key === 'Enter' && newName.trim()) create.mutate(newName.trim()); }}
+            />
+            <button
+              onClick={() => { if (newName.trim()) create.mutate(newName.trim()); }}
+              disabled={!newName.trim() || create.isPending}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" /> Create
+            </button>
+          </div>
+          {error && <div className="mt-2 text-xs text-neg">{error}</div>}
         </div>
-        {error && <div className="mt-2 text-xs text-neg">{error}</div>}
-      </div>
+      )}
 
       {/* List */}
       <div className="rounded-card border border-line bg-surface overflow-hidden">
         <div className="px-5 py-4 border-b border-line-2">
-          <div className="text-[15px] font-medium">All organizations</div>
+          <div className="text-[15px] font-medium">{canCreateOrDelete ? 'All organizations' : 'Organizations you own'}</div>
           <div className="text-ink-3 text-[13px] mt-1">{orgs.length} total</div>
         </div>
         {isLoading ? (
@@ -159,19 +163,21 @@ function OrgsTab() {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
-                      <button
-                        onClick={() => {
-                          if (o.id === 'default') return;
-                          if (confirm(`Delete organization "${o.name}"? This cannot be undone.`)) {
-                            remove.mutate(o.id);
-                          }
-                        }}
-                        disabled={o.id === 'default'}
-                        className="p-1.5 text-ink-3 hover:text-neg transition-colors disabled:opacity-30 disabled:hover:text-ink-3"
-                        title={o.id === 'default' ? 'Cannot delete the default organization' : 'Delete'}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {canCreateOrDelete && (
+                        <button
+                          onClick={() => {
+                            if (o.id === 'default') return;
+                            if (confirm(`Delete organization "${o.name}"? This cannot be undone.`)) {
+                              remove.mutate(o.id);
+                            }
+                          }}
+                          disabled={o.id === 'default'}
+                          className="p-1.5 text-ink-3 hover:text-neg transition-colors disabled:opacity-30 disabled:hover:text-ink-3"
+                          title={o.id === 'default' ? 'Cannot delete the default organization' : 'Delete'}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

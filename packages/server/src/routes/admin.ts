@@ -43,10 +43,54 @@ import {
   addWorkspaceOwner,
   removeWorkspaceOwner,
 } from '../db/org-repository.js';
-import { requireAdmin, requirePlatformOwner } from '../middleware/auth.js';
+import { requirePlatformAdmin, requirePlatformOwner } from '../middleware/auth.js';
+import { isPlatformAdminRole } from '@claude-usage-hub/shared';
 
 const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
 const admin = new Hono<AppEnv>();
+
+// ── Access helpers ──────────────────────────────────────────────────────
+// Platform admin: unrestricted. Org owner: limited to their owned orgs and
+// workspaces in those orgs. These helpers are used inside route handlers.
+
+function isPlatformLike(auth: AuthContext | undefined): boolean {
+  return !!auth && isPlatformAdminRole(auth.role);
+}
+
+function canAccessOrg(auth: AuthContext | undefined, orgId: string): boolean {
+  if (!auth) return false;
+  if (isPlatformLike(auth)) return true;
+  return (auth.ownedOrgIds ?? []).includes(orgId);
+}
+
+function canAccessWorkspace(auth: AuthContext | undefined, wsId: string): boolean {
+  if (!auth) return false;
+  if (isPlatformLike(auth)) return true;
+  const ws = findWorkspaceById(wsId);
+  if (!ws) return false;
+  if ((auth.ownedOrgIds ?? []).includes(ws.orgId)) return true;
+  return (auth.ownedWorkspaceIds ?? []).includes(wsId);
+}
+
+function accessibleOrgIds(auth: AuthContext | undefined): Set<string> | null {
+  // null = unrestricted (platform-like). Set = explicit allow-list.
+  if (!auth || isPlatformLike(auth)) return null;
+  return new Set(auth.ownedOrgIds ?? []);
+}
+
+/** Can the caller view a specific developer's stats? Looks up the developer's
+ *  current org membership and checks the caller has access to that org. */
+function canAccessDeveloper(auth: AuthContext | undefined, developerId: string): boolean {
+  if (!auth) return false;
+  if (isPlatformLike(auth)) return true;
+  // Resolve developerId → user → active org. listUsers() returns all so this
+  // is O(n) over users; fine at our scale.
+  const target = listUsers().find((u) => u.developer_id === developerId);
+  if (!target) return false;
+  const targetOrg = getActiveOrgMembership(target.id);
+  if (!targetOrg) return false;
+  return (auth.ownedOrgIds ?? []).includes(targetOrg.orgId);
+}
 
 /**
  * Parse optional ?orgId=&workspaceId= query params, validating membership.
@@ -83,7 +127,7 @@ function parseScope(c: { req: { query: (k: string) => string | undefined }; get:
 }
 
 /** POST /api/v1/admin/developers — create a developer account. */
-admin.post('/developers', async (c) => {
+admin.post('/developers', requirePlatformAdmin, async (c) => {
   const body = await c.req.json();
   const parsed = createDeveloperSchema.safeParse(body);
   if (!parsed.success) {
@@ -115,7 +159,7 @@ admin.post('/developers', async (c) => {
 });
 
 /** GET /api/v1/admin/developers — list all users. */
-admin.get('/developers', (c) => {
+admin.get('/developers', requirePlatformAdmin, (c) => {
   const users = listUsers();
   return c.json(
     users.map((u) => ({
@@ -130,9 +174,9 @@ admin.get('/developers', (c) => {
 });
 
 /** PATCH /api/v1/admin/developers/:id/role — change a user's role */
-admin.patch('/developers/:id/role', async (c) => {
+admin.patch('/developers/:id/role', requirePlatformAdmin, async (c) => {
   const auth = c.get('auth') as AuthContext | undefined;
-  const targetId = c.req.param('id');
+  const targetId = c.req.param('id') as string;
   const body = await c.req.json() as { role?: string };
 
   // Accept both new and legacy role names so the UI can keep using either during rollout.
@@ -168,7 +212,7 @@ admin.patch('/developers/:id/role', async (c) => {
 });
 
 /** POST /api/v1/admin/api-keys — generate an API key for a user. */
-admin.post('/api-keys', async (c) => {
+admin.post('/api-keys', requirePlatformAdmin, async (c) => {
   const body = await c.req.json();
   const parsed = createApiKeySchema.safeParse(body);
   if (!parsed.success) {
@@ -208,7 +252,7 @@ admin.post('/api-keys', async (c) => {
 });
 
 /** GET /api/v1/admin/api-keys — list all API keys (no hashes). */
-admin.get('/api-keys', (c) => {
+admin.get('/api-keys', requirePlatformAdmin, (c) => {
   const keys = listApiKeys();
   return c.json(
     keys.map((k) => ({
@@ -224,8 +268,8 @@ admin.get('/api-keys', (c) => {
 });
 
 /** DELETE /api/v1/admin/api-keys/:id — revoke an API key. */
-admin.delete('/api-keys/:id', (c) => {
-  const id = c.req.param('id');
+admin.delete('/api-keys/:id', requirePlatformAdmin, (c) => {
+  const id = c.req.param('id') as string;
   const revoked = revokeApiKey(id);
   if (!revoked) {
     return c.json({ error: 'API key not found or already revoked' }, 404);
@@ -253,7 +297,9 @@ admin.get('/stats/overview', (c) => {
 
 /** GET /api/v1/admin/developer-stats/:developerId — scoped stats for a developer */
 admin.get('/developer-stats/:developerId', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
   const developerId = c.req.param('developerId');
+  if (!canAccessDeveloper(auth, developerId)) return c.json({ error: 'Forbidden' }, 403);
   const range = c.req.query('range') ?? '7d';
   const validRanges = new Set(['5h', '24h', '7d', '30d', 'all']);
   const safeRange = (validRanges.has(range) ? range : '7d') as import('@claude-usage-hub/shared').TimeRange;
@@ -262,7 +308,9 @@ admin.get('/developer-stats/:developerId', (c) => {
 
 /** GET /api/v1/admin/developer-timeseries/:developerId — scoped timeseries */
 admin.get('/developer-timeseries/:developerId', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
   const developerId = c.req.param('developerId');
+  if (!canAccessDeveloper(auth, developerId)) return c.json({ error: 'Forbidden' }, 403);
   const range = c.req.query('range') ?? '7d';
   const validRanges = new Set(['5h', '24h', '7d', '30d', 'all']);
   const safeRange = (validRanges.has(range) ? range : '7d') as import('@claude-usage-hub/shared').TimeRange;
@@ -270,7 +318,7 @@ admin.get('/developer-timeseries/:developerId', (c) => {
 });
 
 /** GET /api/v1/admin/settings — return org settings */
-admin.get('/settings', (c) => {
+admin.get('/settings', requirePlatformAdmin, (c) => {
   return c.json({
     retentionDays: parseInt(process.env['RETENTION_DAYS'] ?? '90', 10),
     allowedDomain: process.env['ALLOWED_DOMAIN'] ?? '',
@@ -279,7 +327,7 @@ admin.get('/settings', (c) => {
 });
 
 /** PATCH /api/v1/admin/settings — update settings (retention period) */
-admin.patch('/settings', async (c) => {
+admin.patch('/settings', requirePlatformAdmin, async (c) => {
   const body = await c.req.json() as { retentionDays?: number };
   if (typeof body.retentionDays !== 'number' || body.retentionDays < 1) {
     return c.json({ error: 'retentionDays must be a positive number' }, 400);
@@ -290,13 +338,13 @@ admin.patch('/settings', async (c) => {
 });
 
 /** DELETE /api/v1/admin/data — wipe all usage data (owner+ only) */
-admin.delete('/data', requireAdmin, (c) => {
+admin.delete('/data', requirePlatformAdmin, (c) => {
   const deletedCount = truncateUsageEntries();
   return c.json({ ok: true, deletedCount });
 });
 
 /** DELETE /api/v1/admin/developers/:developerId/data — wipe one member's usage data */
-admin.delete('/developers/:developerId/data', requireAdmin, (c) => {
+admin.delete('/developers/:developerId/data', requirePlatformAdmin, (c) => {
   const { developerId } = c.req.param();
   const user = findUserById(developerId);
   const resolvedDeveloperId = user ? user.developer_id : developerId;
@@ -305,14 +353,14 @@ admin.delete('/developers/:developerId/data', requireAdmin, (c) => {
 });
 
 /** GET /api/v1/admin/developers/:developerId/machines — per-machine stats for a member */
-admin.get('/developers/:developerId/machines', requireAdmin, (c) => {
+admin.get('/developers/:developerId/machines', requirePlatformAdmin, (c) => {
   const developerId = c.req.param('developerId') as string;
   const stats = getMachineStatsForDeveloper(developerId);
   return c.json(stats);
 });
 
 /** DELETE /api/v1/admin/api-keys/:id/data — wipe one machine's usage data */
-admin.delete('/api-keys/:id/data', requireAdmin, (c) => {
+admin.delete('/api-keys/:id/data', requirePlatformAdmin, (c) => {
   const id = c.req.param('id') as string;
   const deletedCount = deleteUsageEntriesForApiKey(id);
   return c.json({ ok: true, deletedCount });
@@ -366,13 +414,17 @@ admin.get('/cost-comparison', (c) => {
 
 // ── Organizations (Phase 3a) ─────────────────────────────────────────────
 
-/** GET /api/v1/admin/organizations — list all orgs (Platform admin sees all). */
+/** GET /api/v1/admin/organizations — list orgs the caller can manage.
+ *  Platform admin sees all; org owners see only their owned orgs. */
 admin.get('/organizations', (c) => {
-  return c.json(listOrganizations());
+  const auth = c.get('auth') as AuthContext | undefined;
+  const allowed = accessibleOrgIds(auth);
+  const all = listOrganizations();
+  return c.json(allowed === null ? all : all.filter((o) => allowed.has(o.id)));
 });
 
 /** POST /api/v1/admin/organizations — create. Body: { name } */
-admin.post('/organizations', async (c) => {
+admin.post('/organizations', requirePlatformAdmin, async (c) => {
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return c.json({ error: 'Auth required' }, 401);
   const body = await c.req.json() as { name?: string };
@@ -390,6 +442,7 @@ admin.patch('/organizations/:id', async (c) => {
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return c.json({ error: 'Auth required' }, 401);
   const id = c.req.param('id');
+  if (!canAccessOrg(auth, id)) return c.json({ error: 'Forbidden' }, 403);
   const body = await c.req.json() as { name?: string };
   if (!body.name || !body.name.trim()) {
     return c.json({ error: 'Name is required' }, 400);
@@ -400,11 +453,12 @@ admin.patch('/organizations/:id', async (c) => {
   return c.json(org);
 });
 
-/** DELETE /api/v1/admin/organizations/:id — delete (refuses if non-empty). */
-admin.delete('/organizations/:id', (c) => {
+/** DELETE /api/v1/admin/organizations/:id — delete (refuses if non-empty).
+ *  Platform admin only; org owners cannot delete the org itself. */
+admin.delete('/organizations/:id', requirePlatformAdmin, (c) => {
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return c.json({ error: 'Auth required' }, 401);
-  const id = c.req.param('id');
+  const id = c.req.param('id') as string;
   if (id === 'default') {
     return c.json({ error: 'Cannot delete the default organization' }, 400);
   }
@@ -418,7 +472,10 @@ admin.delete('/organizations/:id', (c) => {
 
 /** GET /api/v1/admin/organizations/:orgId/workspaces — list workspaces in an org. */
 admin.get('/organizations/:orgId/workspaces', (c) => {
-  return c.json(listWorkspaces(c.req.param('orgId')));
+  const auth = c.get('auth') as AuthContext | undefined;
+  const orgId = c.req.param('orgId');
+  if (!canAccessOrg(auth, orgId)) return c.json({ error: 'Forbidden' }, 403);
+  return c.json(listWorkspaces(orgId));
 });
 
 /** POST /api/v1/admin/organizations/:orgId/workspaces — create. Body: { name } */
@@ -426,6 +483,7 @@ admin.post('/organizations/:orgId/workspaces', async (c) => {
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return c.json({ error: 'Auth required' }, 401);
   const orgId = c.req.param('orgId');
+  if (!canAccessOrg(auth, orgId)) return c.json({ error: 'Forbidden' }, 403);
   const org = findOrganizationById(orgId);
   if (!org) return c.json({ error: 'Organization not found' }, 404);
   const body = await c.req.json() as { name?: string };
@@ -443,6 +501,7 @@ admin.patch('/workspaces/:id', async (c) => {
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return c.json({ error: 'Auth required' }, 401);
   const id = c.req.param('id');
+  if (!canAccessWorkspace(auth, id)) return c.json({ error: 'Forbidden' }, 403);
   const body = await c.req.json() as { name?: string };
   if (!body.name || !body.name.trim()) {
     return c.json({ error: 'Name is required' }, 400);
@@ -458,6 +517,7 @@ admin.delete('/workspaces/:id', (c) => {
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return c.json({ error: 'Auth required' }, 401);
   const id = c.req.param('id');
+  if (!canAccessWorkspace(auth, id)) return c.json({ error: 'Forbidden' }, 403);
   if (id === 'default-ws') {
     return c.json({ error: 'Cannot delete the default workspace' }, 400);
   }
@@ -479,8 +539,10 @@ admin.delete('/workspaces/:id', (c) => {
  *   filter is provided.
  */
 admin.get('/members', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
   const orgId = c.req.query('orgId');
   const workspaceId = c.req.query('workspaceId');
+  const allowed = accessibleOrgIds(auth);
   const users = listUsers();
   const orgOwns = allOrgOwnerships();
   const wsOwns = allWorkspaceOwnerships();
@@ -503,6 +565,10 @@ admin.get('/members', (c) => {
         };
       })
       .filter((m) => {
+        if (allowed !== null) {
+          // Org owner: only see members whose current org is one they own.
+          if (!m.currentOrgId || !allowed.has(m.currentOrgId)) return false;
+        }
         if (orgId && m.currentOrgId !== orgId) return false;
         if (workspaceId && m.currentWorkspaceId !== workspaceId) return false;
         return true;
@@ -534,6 +600,14 @@ admin.post('/users/:id/move', async (c) => {
     return c.json({ error: 'Workspace does not belong to the chosen organization' }, 400);
   }
 
+  // Scope check: caller must control BOTH the source (if any) and destination
+  // org. Platform admins pass automatically.
+  if (!canAccessOrg(auth, body.orgId)) return c.json({ error: 'Forbidden: destination org' }, 403);
+  const sourceOrg = getActiveOrgMembership(userId)?.orgId;
+  if (sourceOrg && !canAccessOrg(auth, sourceOrg)) {
+    return c.json({ error: 'Forbidden: source org' }, 403);
+  }
+
   assignUserToWorkspace(userId, body.orgId, body.workspaceId);
   writeAudit({
     id: randomUUID(),
@@ -556,6 +630,7 @@ admin.post('/org-owners', async (c) => {
   if (!body.userId || !body.orgId) return c.json({ error: 'userId and orgId are required' }, 400);
   if (!findUserById(body.userId)) return c.json({ error: 'User not found' }, 404);
   if (!findOrganizationById(body.orgId)) return c.json({ error: 'Organization not found' }, 404);
+  if (!canAccessOrg(auth, body.orgId)) return c.json({ error: 'Forbidden' }, 403);
   addOrgOwner(body.userId, body.orgId);
   writeAudit({
     id: randomUUID(), actorId: auth.userId, targetId: body.userId,
@@ -570,6 +645,7 @@ admin.delete('/org-owners/:userId/:orgId', (c) => {
   if (!auth) return c.json({ error: 'Auth required' }, 401);
   const userId = c.req.param('userId') as string;
   const orgId = c.req.param('orgId') as string;
+  if (!canAccessOrg(auth, orgId)) return c.json({ error: 'Forbidden' }, 403);
   removeOrgOwner(userId, orgId);
   writeAudit({
     id: randomUUID(), actorId: auth.userId, targetId: userId,
@@ -586,6 +662,7 @@ admin.post('/workspace-owners', async (c) => {
   if (!body.userId || !body.workspaceId) return c.json({ error: 'userId and workspaceId are required' }, 400);
   if (!findUserById(body.userId)) return c.json({ error: 'User not found' }, 404);
   if (!findWorkspaceById(body.workspaceId)) return c.json({ error: 'Workspace not found' }, 404);
+  if (!canAccessWorkspace(auth, body.workspaceId)) return c.json({ error: 'Forbidden' }, 403);
   addWorkspaceOwner(body.userId, body.workspaceId);
   writeAudit({
     id: randomUUID(), actorId: auth.userId, targetId: body.userId,
@@ -600,6 +677,7 @@ admin.delete('/workspace-owners/:userId/:workspaceId', (c) => {
   if (!auth) return c.json({ error: 'Auth required' }, 401);
   const userId = c.req.param('userId') as string;
   const workspaceId = c.req.param('workspaceId') as string;
+  if (!canAccessWorkspace(auth, workspaceId)) return c.json({ error: 'Forbidden' }, 403);
   removeWorkspaceOwner(userId, workspaceId);
   writeAudit({
     id: randomUUID(), actorId: auth.userId, targetId: userId,
@@ -652,8 +730,26 @@ admin.post('/users/:id/demote-platform-admin', requirePlatformOwner, (c) => {
 // ── Audit log (Phase 3a stub; full UI in 3c) ─────────────────────────────
 
 admin.get('/role-audit', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 500);
-  return c.json(listRoleAudit(limit));
+  const all = listRoleAudit(limit);
+  const allowed = accessibleOrgIds(auth);
+  if (allowed === null) return c.json(all);
+  // Org owner: only see scoped entries that fall inside their owned orgs.
+  const owned = allowed;
+  const ownedOrgsOfWs = new Set<string>();
+  for (const wsId of (auth?.ownedWorkspaceIds ?? [])) {
+    const ws = findWorkspaceById(wsId);
+    if (ws) ownedOrgsOfWs.add(ws.id);
+  }
+  return c.json(all.filter((e) => {
+    if (e.scopeType === 'org' && e.scopeId && owned.has(e.scopeId)) return true;
+    if (e.scopeType === 'workspace' && e.scopeId) {
+      const ws = findWorkspaceById(e.scopeId);
+      return !!ws && (owned.has(ws.orgId) || ownedOrgsOfWs.has(e.scopeId));
+    }
+    return false;
+  }));
 });
 
 export { admin as adminRoutes };

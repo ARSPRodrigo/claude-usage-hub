@@ -91,23 +91,44 @@ export default function App() {
     localStorage.setItem('theme', dark ? 'dark' : 'light');
   }, [dark]);
 
-  // Refresh role/displayName from the server on mount so legacy values
-  // (e.g. primary_owner cached in localStorage) get the canonical platform_*
-  // values without forcing a re-login.
+  // Refresh role/displayName/ownership from the server on mount so legacy
+  // values (e.g. primary_owner cached in localStorage) get the canonical
+  // platform_* values and ownership grants land in localStorage without
+  // forcing a re-login. Also re-fetches every 5 minutes so promote/demote
+  // / grant changes take effect without a manual reload.
   useEffect(() => {
-    if (!getToken() || !getUser()) return;
-    apiGet<{ id: string; email: string; displayName: string; role: string; developerId: string }>(
-      '/auth/me',
-    )
-      .then((fresh) => {
-        const current = getUser();
-        if (current && (current.role !== fresh.role || current.displayName !== fresh.displayName)) {
-          setUser({ ...current, role: fresh.role as typeof current.role, displayName: fresh.displayName });
-          // Force re-render by toggling state.
-          setPathname((p) => p);
-        }
-      })
-      .catch(() => { /* ignore — 401 is handled by apiGet */ });
+    function refresh() {
+      if (!getToken() || !getUser()) return;
+      apiGet<{
+        id: string; email: string; displayName: string; role: string;
+        developerId: string; ownedOrgIds?: string[]; ownedWorkspaceIds?: string[];
+      }>('/auth/me')
+        .then((fresh) => {
+          const current = getUser();
+          if (!current) return;
+          const ownedOrgIds = fresh.ownedOrgIds ?? [];
+          const ownedWorkspaceIds = fresh.ownedWorkspaceIds ?? [];
+          const changed =
+            current.role !== fresh.role ||
+            current.displayName !== fresh.displayName ||
+            JSON.stringify(current.ownedOrgIds ?? []) !== JSON.stringify(ownedOrgIds) ||
+            JSON.stringify(current.ownedWorkspaceIds ?? []) !== JSON.stringify(ownedWorkspaceIds);
+          if (changed) {
+            setUser({
+              ...current,
+              role: fresh.role as typeof current.role,
+              displayName: fresh.displayName,
+              ownedOrgIds,
+              ownedWorkspaceIds,
+            });
+            setPathname((p) => p);
+          }
+        })
+        .catch(() => { /* ignore — 401 is handled by apiGet */ });
+    }
+    refresh();
+    const id = setInterval(refresh, 5 * 60_000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {

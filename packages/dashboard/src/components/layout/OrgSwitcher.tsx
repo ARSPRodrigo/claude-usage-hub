@@ -8,22 +8,24 @@ import { useScope, setScope } from '@/lib/scope';
 /**
  * Two dropdowns shown in the top bar: Organization + Workspace.
  *
- * Visible only if the user can see more than one org (platform admin / owner,
- * or any user who owns at least one org). Hidden for plain developers — they
- * are scoped to their single workspace anyway.
+ * Visible to anyone who can manage at least one org or workspace —
+ * platform admins, platform owner, or org/workspace owners. Plain
+ * developers don't see it (they're scoped to their own usage).
  */
 export function OrgSwitcher() {
   const user = getUser();
   const scope = useScope();
 
   const isPlatform = isPlatformAdmin(user?.role);
+  const isOrgOwner = (user?.ownedOrgIds?.length ?? 0) > 0 || (user?.ownedWorkspaceIds?.length ?? 0) > 0;
 
   const { data: orgs = [] } = useOrgList();
   const { data: workspaces = [] } = useWorkspaceList(scope.orgId ?? null);
 
-  // Show the switcher if the caller can see >1 org, OR if they're a platform
-  // admin (they should always have the switcher even if there's only one org).
-  if (!isPlatform && orgs.length < 2) return null;
+  // Hide entirely for plain developers. Platform admins always see it; org
+  // owners see it once they have at least one accessible org.
+  if (!isPlatform && !isOrgOwner) return null;
+  if (!isPlatform && orgs.length === 0) return null;
 
   const activeOrg = orgs.find((o) => o.id === scope.orgId);
   const activeWs = workspaces.find((w) => w.id === scope.workspaceId);

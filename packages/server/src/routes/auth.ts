@@ -142,6 +142,11 @@ auth.get('/me', jwtAuth, async (c) => {
     displayName: user.display_name,
     role: user.role,
     developerId: user.developer_id,
+    // Ownership + active membership — enrichAuth populates these per-request.
+    ownedOrgIds: authCtx.ownedOrgIds ?? [],
+    ownedWorkspaceIds: authCtx.ownedWorkspaceIds ?? [],
+    activeOrgId: authCtx.activeOrgId ?? null,
+    activeWorkspaceId: authCtx.activeWorkspaceId ?? null,
   });
 });
 
