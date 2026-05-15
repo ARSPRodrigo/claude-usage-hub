@@ -9,6 +9,8 @@ export interface InvitationRow {
   expires_at: string;
   accepted_at: string | null;
   role: string;
+  org_id: string | null;
+  workspace_id: string | null;
 }
 
 export function createInvitation(inv: {
@@ -18,12 +20,17 @@ export function createInvitation(inv: {
   invitedBy: string;
   expiresAt: string;
   role: string;
+  orgId?: string | null;
+  workspaceId?: string | null;
 }): void {
   const db = getRawDb();
   db.prepare(
-    `INSERT INTO invitations (id, email, token_hash, invited_by, expires_at, role)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(inv.id, inv.email, inv.tokenHash, inv.invitedBy, inv.expiresAt, inv.role);
+    `INSERT INTO invitations (id, email, token_hash, invited_by, expires_at, role, org_id, workspace_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    inv.id, inv.email, inv.tokenHash, inv.invitedBy, inv.expiresAt, inv.role,
+    inv.orgId ?? null, inv.workspaceId ?? null,
+  );
 }
 
 export function findInvitationByTokenHash(tokenHash: string): InvitationRow | null {
@@ -47,6 +54,11 @@ export function findInvitationByEmail(email: string): InvitationRow | null {
 export function markInvitationAccepted(id: string): void {
   const db = getRawDb();
   db.prepare("UPDATE invitations SET accepted_at = datetime('now') WHERE id = ?").run(id);
+}
+
+export function findInvitationById(id: string): InvitationRow | null {
+  const db = getRawDb();
+  return (db.prepare('SELECT * FROM invitations WHERE id = ?').get(id) as InvitationRow) ?? null;
 }
 
 export function deleteInvitation(id: string): boolean {

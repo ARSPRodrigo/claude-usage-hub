@@ -13,6 +13,11 @@ import {
 import { verifyPassword } from '../services/auth-utils.js';
 import { verifyGoogleToken } from '../services/google-auth.js';
 import { signJwt, jwtAuth, getGoogleConfig } from '../middleware/auth.js';
+import {
+  findDomainRuleForEmail,
+  assignUserToWorkspace,
+  getActiveOrgMembership,
+} from '../db/org-repository.js';
 
 const auth = new Hono<AppEnv>();
 
@@ -90,6 +95,7 @@ auth.post('/google/verify', async (c) => {
   }
 
   // Create new user if not found
+  const isNewUser = !user;
   if (!user) {
     const id = randomUUID();
     const developerId = `dev-${id.slice(0, 8)}`;
@@ -102,6 +108,18 @@ auth.post('/google/verify', async (c) => {
       googleId: googleUser.sub,
     });
     user = findUserById(id)!;
+  }
+
+  // Apply domain auto-assign rule. Runs for genuinely new users AND for
+  // existing users who have no active org membership (e.g. accounts that
+  // never landed in any org). Existing users WITH an active membership
+  // are left alone — admins move them manually.
+  const hasActiveOrg = !!getActiveOrgMembership(user.id);
+  if (isNewUser || !hasActiveOrg) {
+    const rule = findDomainRuleForEmail(user.email);
+    if (rule) {
+      assignUserToWorkspace(user.id, rule.orgId, rule.workspaceId);
+    }
   }
 
   const token = await signJwt({
@@ -142,6 +160,11 @@ auth.get('/me', jwtAuth, async (c) => {
     displayName: user.display_name,
     role: user.role,
     developerId: user.developer_id,
+    // Ownership + active membership — enrichAuth populates these per-request.
+    ownedOrgIds: authCtx.ownedOrgIds ?? [],
+    ownedWorkspaceIds: authCtx.ownedWorkspaceIds ?? [],
+    activeOrgId: authCtx.activeOrgId ?? null,
+    activeWorkspaceId: authCtx.activeWorkspaceId ?? null,
   });
 });
 

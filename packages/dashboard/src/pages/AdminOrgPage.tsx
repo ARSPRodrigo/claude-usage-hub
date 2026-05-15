@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiDelete, getUser } from '@/api/client';
+import { apiGet, apiDelete, getUser, isPlatformAdmin } from '@/api/client';
 import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import { formatTokens, formatCost, formatRelative } from '@/lib/utils';
+import { useScope } from '@/lib/scope';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
@@ -21,6 +22,9 @@ interface DeveloperStat {
   role?: string;
   totalTokens: number;
   costUsd: number;
+  /** Distinct session count. */
+  sessionCount: number;
+  /** Raw usage entry count (kept for backwards compat with older servers). */
   entryCount: number;
   lastSeen: string | null;
 }
@@ -38,17 +42,20 @@ function HBar({ value, max, color, height = 4 }: { value: number; max: number; c
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  primary_owner: 'Primary',
-  owner: 'Owner',
+  platform_owner: 'Owner',
+  platform_admin: 'Admin',
+  primary_owner: 'Owner',  // legacy
+  owner: 'Admin',           // legacy
   developer: 'Dev',
 };
 
 export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
   const qc = useQueryClient();
   const currentUser = getUser();
-  const isOwner = currentUser?.role === 'primary_owner' || currentUser?.role === 'owner';
+  const isOwner = isPlatformAdmin(currentUser?.role);
   const [range, setRange] = useState<TimeRange>('7d');
   const [wipingId, setWipingId] = useState<string | null>(null);
+  const scope = useScope();
 
   const wipeDeveloper = useMutation({
     mutationFn: (developerId: string) =>
@@ -61,8 +68,12 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
   });
 
   const { data: devStats = [] } = useQuery({
-    queryKey: ['admin-dev-stats', range],
-    queryFn: () => apiGet<DeveloperStat[]>('/api/v1/admin/stats/developers', { range }),
+    queryKey: ['admin-dev-stats', range, scope.orgId, scope.workspaceId],
+    queryFn: () => apiGet<DeveloperStat[]>('/api/v1/admin/stats/developers', {
+      range,
+      ...(scope.orgId ? { orgId: scope.orgId } : {}),
+      ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
+    }),
   });
 
   const totalCost = devStats.reduce((s, d) => s + d.costUsd, 0);
@@ -185,7 +196,7 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-right mono tabular">{formatCost(d.costUsd)}</td>
-                    <td className="px-4 py-3.5 text-right mono tabular">{d.entryCount}</td>
+                    <td className="px-4 py-3.5 text-right mono tabular">{d.sessionCount ?? d.entryCount}</td>
                     <td className="px-4 py-3.5 text-ink-3 text-xs">
                       {d.lastSeen ? formatRelative(d.lastSeen) : 'Never'}
                     </td>

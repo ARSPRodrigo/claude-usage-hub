@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Sun, Moon } from 'lucide-react';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { OrgSwitcher } from '@/components/layout/OrgSwitcher';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { SessionsPage } from '@/pages/SessionsPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
@@ -14,10 +15,15 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { DeveloperDetailPage } from '@/pages/DeveloperDetailPage';
 import { HelpPage } from '@/pages/HelpPage';
 import { CostComparisonPage } from '@/pages/CostComparisonPage';
-import { getToken, getUser } from '@/api/client';
+import { ManagePage } from '@/pages/ManagePage';
+import { apiGet, getToken, getUser, setUser } from '@/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 
-export type InnerPage = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'settings' | 'developer-detail' | 'help';
+export type InnerPage =
+  | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile'
+  | 'admin-org' | 'admin-team' | 'admin-cost-comparison'
+  | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit' | 'manage-domain-rules'
+  | 'settings' | 'developer-detail' | 'help';
 
 const PAGE_LABELS: Record<InnerPage, string> = {
   dashboard: 'DASHBOARD',
@@ -29,6 +35,11 @@ const PAGE_LABELS: Record<InnerPage, string> = {
   settings: 'SETTINGS',
   'cost-comparison': 'COST COMPARISON',
   'admin-cost-comparison': 'COST COMPARISON',
+  'manage-organizations': 'ORGANIZATIONS',
+  'manage-workspaces': 'WORKSPACES',
+  'manage-members': 'MEMBERS',
+  'manage-audit': 'AUDIT LOG',
+  'manage-domain-rules': 'DOMAIN RULES',
   'developer-detail': 'DEVELOPER',
   help: 'HELP',
 };
@@ -45,6 +56,13 @@ function pathnameToPage(pathname: string): InnerPage | null {
   if (pathname === '/projects') return 'projects';
   if (pathname === '/cost-comparison') return 'cost-comparison';
   if (pathname === '/admin/cost-comparison') return 'admin-cost-comparison';
+  if (pathname === '/manage/organizations') return 'manage-organizations';
+  if (pathname === '/manage/workspaces') return 'manage-workspaces';
+  if (pathname === '/manage/members') return 'manage-members';
+  if (pathname === '/manage/audit') return 'manage-audit';
+  if (pathname === '/manage/domain-rules') return 'manage-domain-rules';
+  // Legacy alias from before the Manage split — redirect target.
+  if (pathname === '/admin/manage') return 'manage-organizations';
   if (pathname === '/admin/org') return 'admin-org';
   if (pathname === '/admin/team') return 'admin-team';
   if (pathname === '/admin/settings') return 'settings';
@@ -74,6 +92,46 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark);
     localStorage.setItem('theme', dark ? 'dark' : 'light');
   }, [dark]);
+
+  // Refresh role/displayName/ownership from the server on mount so legacy
+  // values (e.g. primary_owner cached in localStorage) get the canonical
+  // platform_* values and ownership grants land in localStorage without
+  // forcing a re-login. Also re-fetches every 5 minutes so promote/demote
+  // / grant changes take effect without a manual reload.
+  useEffect(() => {
+    function refresh() {
+      if (!getToken() || !getUser()) return;
+      apiGet<{
+        id: string; email: string; displayName: string; role: string;
+        developerId: string; ownedOrgIds?: string[]; ownedWorkspaceIds?: string[];
+      }>('/auth/me')
+        .then((fresh) => {
+          const current = getUser();
+          if (!current) return;
+          const ownedOrgIds = fresh.ownedOrgIds ?? [];
+          const ownedWorkspaceIds = fresh.ownedWorkspaceIds ?? [];
+          const changed =
+            current.role !== fresh.role ||
+            current.displayName !== fresh.displayName ||
+            JSON.stringify(current.ownedOrgIds ?? []) !== JSON.stringify(ownedOrgIds) ||
+            JSON.stringify(current.ownedWorkspaceIds ?? []) !== JSON.stringify(ownedWorkspaceIds);
+          if (changed) {
+            setUser({
+              ...current,
+              role: fresh.role as typeof current.role,
+              displayName: fresh.displayName,
+              ownedOrgIds,
+              ownedWorkspaceIds,
+            });
+            setPathname((p) => p);
+          }
+        })
+        .catch(() => { /* ignore — 401 is handled by apiGet */ });
+    }
+    refresh();
+    const id = setInterval(refresh, 5 * 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const handler = () => {
@@ -105,6 +163,11 @@ export default function App() {
     projects: '/projects',
     'cost-comparison': '/cost-comparison',
     'admin-cost-comparison': '/admin/cost-comparison',
+    'manage-organizations': '/manage/organizations',
+    'manage-workspaces': '/manage/workspaces',
+    'manage-members': '/manage/members',
+    'manage-audit': '/manage/audit',
+    'manage-domain-rules': '/manage/domain-rules',
     profile: '/profile',
     'admin-org': '/admin/org',
     'admin-team': '/admin/team',
@@ -152,6 +215,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <OrgSwitcher />
             <button
               onClick={() => queryClient.invalidateQueries()}
               title="Refresh"
@@ -176,6 +240,11 @@ export default function App() {
           {currentPage === 'projects' && <ProjectsPage />}
           {currentPage === 'cost-comparison' && <CostComparisonPage />}
           {currentPage === 'admin-cost-comparison' && <CostComparisonPage orgWide />}
+          {currentPage === 'manage-organizations' && <ManagePage section="orgs" />}
+          {currentPage === 'manage-workspaces' && <ManagePage section="workspaces" />}
+          {currentPage === 'manage-members' && <ManagePage section="members" />}
+          {currentPage === 'manage-audit' && <ManagePage section="audit" />}
+          {currentPage === 'manage-domain-rules' && <ManagePage section="domain-rules" />}
           {currentPage === 'profile' && <ProfilePage />}
           {currentPage === 'admin-org' && (
             <AdminOrgPage onSelectDeveloper={handleSelectDeveloper} />

@@ -24,8 +24,18 @@ function cutoffTime(range: TimeRange): string | null {
   return cutoff.toISOString();
 }
 
-/** Build a WHERE clause fragment with optional developer scoping. */
-function whereClause(range: TimeRange, developerId?: string): { sql: string; params: string[] } {
+/** Optional scope filters that can be layered on top of a time range. */
+export interface ScopeFilter {
+  developerId?: string;
+  organizationId?: string;
+  workspaceId?: string;
+}
+
+/** Build a WHERE clause fragment with optional scope filters. */
+function whereClause(range: TimeRange, scope: ScopeFilter | string | undefined = {}): { sql: string; params: string[] } {
+  // Backwards-compat: callers used to pass developerId directly as 2nd arg.
+  const filter: ScopeFilter = typeof scope === 'string' ? { developerId: scope } : (scope ?? {});
+
   const conditions: string[] = [];
   const params: string[] = [];
 
@@ -34,9 +44,17 @@ function whereClause(range: TimeRange, developerId?: string): { sql: string; par
     conditions.push('timestamp >= ?');
     params.push(cutoff);
   }
-  if (developerId) {
+  if (filter.developerId) {
     conditions.push('developer_id = ?');
-    params.push(developerId);
+    params.push(filter.developerId);
+  }
+  if (filter.organizationId) {
+    conditions.push('organization_id = ?');
+    params.push(filter.organizationId);
+  }
+  if (filter.workspaceId) {
+    conditions.push('workspace_id = ?');
+    params.push(filter.workspaceId);
   }
 
   const sql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -81,10 +99,41 @@ export function insertEntries(entries: EnrichedEntry[], apiKeyId?: string): numb
     INSERT OR IGNORE INTO usage_entries
       (session_id, message_id, request_id, timestamp, model,
        input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-       service_tier, developer_id, project_alias, cost_usd, api_key_id)
+       service_tier, developer_id, project_alias, cost_usd, api_key_id,
+       organization_id, workspace_id)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+
+  // Cache per-developer active memberships for the duration of this batch —
+  // amortizes the lookup when many entries belong to the same user.
+  const orgCache = new Map<string, string | null>();
+  const wsCache = new Map<string, string | null>();
+  const lookupOrg = raw.prepare(`
+    SELECT org_id FROM org_memberships
+    WHERE user_id = (SELECT id FROM users WHERE developer_id = ?) AND valid_to IS NULL
+    ORDER BY valid_from DESC LIMIT 1
+  `);
+  const lookupWs = raw.prepare(`
+    SELECT workspace_id FROM workspace_memberships
+    WHERE user_id = (SELECT id FROM users WHERE developer_id = ?) AND valid_to IS NULL
+    ORDER BY valid_from DESC LIMIT 1
+  `);
+
+  function resolveOrg(developerId: string): string | null {
+    if (orgCache.has(developerId)) return orgCache.get(developerId)!;
+    const row = lookupOrg.get(developerId) as { org_id: string } | undefined;
+    const v = row?.org_id ?? null;
+    orgCache.set(developerId, v);
+    return v;
+  }
+  function resolveWs(developerId: string): string | null {
+    if (wsCache.has(developerId)) return wsCache.get(developerId)!;
+    const row = lookupWs.get(developerId) as { workspace_id: string } | undefined;
+    const v = row?.workspace_id ?? null;
+    wsCache.set(developerId, v);
+    return v;
+  }
 
   let inserted = 0;
   const transaction = raw.transaction(() => {
@@ -104,6 +153,8 @@ export function insertEntries(entries: EnrichedEntry[], apiKeyId?: string): numb
         e.projectAlias,
         e.costUsd,
         apiKeyId ?? null,
+        resolveOrg(e.developerId),
+        resolveWs(e.developerId),
       );
       inserted += result.changes;
     }
@@ -116,9 +167,10 @@ export function insertEntries(entries: EnrichedEntry[], apiKeyId?: string): numb
 /**
  * Get dashboard overview stats for a time range.
  */
-export function getDashboardStats(range: TimeRange, developerId?: string): DashboardStats {
+export function getDashboardStats(range: TimeRange, scope?: ScopeFilter | string): DashboardStats {
   const raw = getRawDb();
-  const where = whereClause(range, developerId);
+  const filter: ScopeFilter = typeof scope === 'string' ? { developerId: scope } : (scope ?? {});
+  const where = whereClause(range, filter);
 
   const row = raw
     .prepare(
@@ -133,14 +185,28 @@ export function getDashboardStats(range: TimeRange, developerId?: string): Dashb
     )
     .get(...where.params) as { tokens: number; cost: number; sessions: number };
 
-  // Active sessions: sessions with activity in last 5 hours
+  // Active sessions: sessions with activity in last 5 hours.
+  // Apply the same scope filters so per-org / per-workspace stats reflect that scope.
   const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
-  const dev = devFilter(developerId);
+  const activeConds: string[] = ['timestamp >= ?'];
+  const activeParams: string[] = [fiveHoursAgo];
+  if (filter.developerId) {
+    activeConds.push('developer_id = ?');
+    activeParams.push(filter.developerId);
+  }
+  if (filter.organizationId) {
+    activeConds.push('organization_id = ?');
+    activeParams.push(filter.organizationId);
+  }
+  if (filter.workspaceId) {
+    activeConds.push('workspace_id = ?');
+    activeParams.push(filter.workspaceId);
+  }
   const activeRow = raw
     .prepare(
-      `SELECT COUNT(DISTINCT session_id) as active FROM usage_entries WHERE timestamp >= ? ${dev.sql}`,
+      `SELECT COUNT(DISTINCT session_id) as active FROM usage_entries WHERE ${activeConds.join(' AND ')}`,
     )
-    .get(fiveHoursAgo, ...dev.params) as { active: number };
+    .get(...activeParams) as { active: number };
 
   return {
     tokensToday: row.tokens,
@@ -547,10 +613,10 @@ interface TierTokens {
  */
 export function getAggregateTokensByTier(
   range: TimeRange,
-  developerId?: string,
+  scope?: ScopeFilter | string,
 ): { opus: TierTokens; sonnet: TierTokens } {
   const raw = getRawDb();
-  const where = whereClause(range, developerId);
+  const where = whereClause(range, scope);
 
   // Add model filter to where clause
   const andPrefix = where.sql ? ' AND' : 'WHERE';
@@ -637,6 +703,9 @@ export interface DeveloperStatRow {
   role: string;
   totalTokens: number;
   costUsd: number;
+  /** Distinct session count for this developer in the time range. */
+  sessionCount: number;
+  /** Raw count of usage_entries rows. Useful for "activity" but NOT sessions. */
   entryCount: number;
   lastSeen: string | null;
 }
@@ -644,11 +713,52 @@ export interface DeveloperStatRow {
 /**
  * Per-member usage breakdown — admin only. Includes all roles.
  */
-export function getDeveloperStats(range?: TimeRange): DeveloperStatRow[] {
+export function getDeveloperStats(
+  range?: TimeRange,
+  scope?: { organizationId?: string; workspaceId?: string },
+): DeveloperStatRow[] {
   const raw = getRawDb();
   const cutoff = range ? cutoffTime(range) : null;
-  const timeFilter = cutoff ? 'AND e.timestamp >= ?' : '';
-  const params = cutoff ? [cutoff] : [];
+
+  // Build entry-side filter (applied via LEFT JOIN ON ... AND ...).
+  const entryConds: string[] = [];
+  const entryParams: string[] = [];
+  if (cutoff) {
+    entryConds.push('e.timestamp >= ?');
+    entryParams.push(cutoff);
+  }
+  if (scope?.organizationId) {
+    entryConds.push('e.organization_id = ?');
+    entryParams.push(scope.organizationId);
+  }
+  if (scope?.workspaceId) {
+    entryConds.push('e.workspace_id = ?');
+    entryParams.push(scope.workspaceId);
+  }
+  const entryFilter = entryConds.length > 0 ? `AND ${entryConds.join(' AND ')}` : '';
+
+  // Optionally filter the user list itself to active members of the scope.
+  // This is the "Members in this org/workspace right now" lens — past
+  // members are excluded once we filter by active memberships.
+  const userConds: string[] = [];
+  const userParams: string[] = [];
+  if (scope?.organizationId) {
+    userConds.push(`u.id IN (
+      SELECT user_id FROM org_memberships
+      WHERE org_id = ? AND valid_to IS NULL
+    )`);
+    userParams.push(scope.organizationId);
+  }
+  if (scope?.workspaceId) {
+    userConds.push(`u.id IN (
+      SELECT user_id FROM workspace_memberships
+      WHERE workspace_id = ? AND valid_to IS NULL
+    )`);
+    userParams.push(scope.workspaceId);
+  }
+  const userFilter = userConds.length > 0 ? `WHERE ${userConds.join(' AND ')}` : '';
+
+  const params = [...entryParams, ...userParams];
 
   return raw.prepare(`
     SELECT
@@ -658,10 +768,12 @@ export function getDeveloperStats(range?: TimeRange): DeveloperStatRow[] {
       u.role           AS role,
       COALESCE(SUM(e.input_tokens + e.output_tokens + e.cache_creation_tokens + e.cache_read_tokens), 0) AS totalTokens,
       COALESCE(SUM(e.cost_usd), 0)  AS costUsd,
+      COUNT(DISTINCT e.session_id)  AS sessionCount,
       COUNT(e.id)                   AS entryCount,
       MAX(e.timestamp)              AS lastSeen
     FROM users u
-    LEFT JOIN usage_entries e ON e.developer_id = u.developer_id ${timeFilter}
+    LEFT JOIN usage_entries e ON e.developer_id = u.developer_id ${entryFilter}
+    ${userFilter}
     GROUP BY u.id
     ORDER BY costUsd DESC
   `).all(...params) as DeveloperStatRow[];

@@ -17,7 +17,8 @@ function makeEntry(overrides: Partial<EnrichedEntry> = {}): EnrichedEntry {
     sessionId: 's1',
     messageId: `msg_${Math.random().toString(36).slice(2, 8)}`,
     requestId: `req_${Math.random().toString(36).slice(2, 8)}`,
-    timestamp: '2026-04-01T10:00:00Z',
+    // Relative to "now" so the 30d window in tests doesn't drift out of range over time.
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     model: 'claude-opus-4-6',
     usage: { inputTokens: 100, outputTokens: 200, cacheCreationTokens: 50, cacheReadTokens: 25 },
     serviceTier: 'standard',

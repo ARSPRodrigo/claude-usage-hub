@@ -22,7 +22,8 @@ import {
   getLastEntryTimestamp,
   getAggregateTokensByTier,
 } from '../db/repository.js';
-import { computeComparisonCosts } from '@claude-usage-hub/shared';
+import { computeComparisonCosts, isPlatformAdminRole } from '@claude-usage-hub/shared';
+import { listOrganizations, listWorkspaces } from '../db/org-repository.js';
 import { ingestPayload } from '../services/ingest.js';
 
 const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
@@ -33,13 +34,17 @@ function parseRange(c: { req: { query: (key: string) => string | undefined } }):
 }
 
 /**
- * Get the developer scope for queries.
- * Returns developerId for developer role (scoped), undefined for admin roles/local (all data).
+ * Get the developer scope for personal /dashboard/* queries.
+ *
+ * Always returns the caller's developerId — even for admins. The
+ * /dashboard/* routes are the user's *personal* view; admins who want
+ * org-wide aggregates use /admin/* endpoints instead. Local mode (no
+ * auth) returns undefined so the single-user instance sees everything.
  */
 function getDeveloperScope(c: Context): string | undefined {
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return undefined; // local mode — no scoping
-  return auth.role === 'developer' ? auth.developerId : undefined;
+  return auth.developerId;
 }
 
 const api = new Hono<AppEnv>();
@@ -200,6 +205,43 @@ api.get('/projects/:alias/detail', (c) => {
   const alias = c.req.param('alias');
   const range = parseRange(c);
   return c.json(getProjectDetail(alias, range, getDeveloperScope(c)));
+});
+
+// ── Organizations & workspaces (Phase 2) ─────────────────────────────────
+// Listings are scoped to what the caller can see:
+//  - platform admin / owner: all orgs and all workspaces
+//  - org owner: only orgs they own (plus their active org)
+//  - developer: only their active org/workspace (so the UI badge works)
+//
+// These endpoints sit under /dashboard so the existing JWT middleware applies.
+
+api.get('/dashboard/orgs', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  const all = listOrganizations();
+  if (!auth) return c.json(all);
+  if (isPlatformAdminRole(auth.role)) return c.json(all);
+
+  const allowedIds = new Set<string>([
+    ...(auth.ownedOrgIds ?? []),
+    ...(auth.activeOrgId ? [auth.activeOrgId] : []),
+  ]);
+  return c.json(all.filter((o) => allowedIds.has(o.id)));
+});
+
+api.get('/dashboard/workspaces', (c) => {
+  const auth = c.get('auth') as AuthContext | undefined;
+  const orgId = c.req.query('orgId');
+  const all = listWorkspaces(orgId);
+  if (!auth) return c.json(all);
+  if (isPlatformAdminRole(auth.role)) return c.json(all);
+
+  // Org owner: see all workspaces in their owned orgs.
+  // Developer: only their active workspace.
+  const ownedOrgs = new Set(auth.ownedOrgIds ?? []);
+  if (orgId && ownedOrgs.has(orgId)) return c.json(all);
+
+  const activeWs = auth.activeWorkspaceId;
+  return c.json(all.filter((w) => w.id === activeWs));
 });
 
 export { api };

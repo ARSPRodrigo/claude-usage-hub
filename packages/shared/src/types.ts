@@ -93,16 +93,54 @@ export type CursorState = Record<string, number>;
 /** Alias mapping stored locally: hash → original project dir. */
 export type AliasMap = Record<string, string>;
 
-/** User roles in the system (hierarchy: primary_owner > owner > developer). */
-export type UserRole = 'primary_owner' | 'owner' | 'developer';
+/**
+ * Platform-level roles (column `users.role`).
+ *
+ *  - platform_owner: exactly one per Hub. Cannot be deleted; can be transferred.
+ *  - platform_admin: many allowed. Can manage all orgs/workspaces.
+ *  - developer:      default. Org/workspace ownership lives in join tables
+ *                    (org_owners, workspace_owners), not on the user row.
+ *
+ * Legacy values primary_owner / owner are accepted by isAdminRole() and
+ * isPlatformOwner() so the app keeps working between deploy + migration.
+ */
+export type UserRole = 'platform_owner' | 'platform_admin' | 'developer';
 
-/** Roles that have admin-level access (can view all data, manage team). */
-export const ADMIN_ROLES: readonly UserRole[] = ['primary_owner', 'owner'] as const;
+/** Legacy role names retained for migration / backwards compat checks. */
+export type LegacyUserRole = 'primary_owner' | 'owner';
 
-/** Check if a role has admin-level access. */
-export function isAdminRole(role: string): boolean {
-  return role === 'primary_owner' || role === 'owner';
+/** Roles that can manage the whole platform (create orgs, see everything). */
+export const PLATFORM_ADMIN_ROLES: readonly string[] = [
+  'platform_owner',
+  'platform_admin',
+  // legacy
+  'primary_owner',
+  'owner',
+] as const;
+
+/** Roles that are the singular platform owner. */
+export const PLATFORM_OWNER_ROLES: readonly string[] = [
+  'platform_owner',
+  'primary_owner', // legacy
+] as const;
+
+/** Check if a role grants platform-admin reach (legacy-tolerant). */
+export function isPlatformAdminRole(role: string): boolean {
+  return PLATFORM_ADMIN_ROLES.includes(role);
 }
+
+/** Check if a role is the singular platform owner (legacy-tolerant). */
+export function isPlatformOwnerRole(role: string): boolean {
+  return PLATFORM_OWNER_ROLES.includes(role);
+}
+
+/** @deprecated Use isPlatformAdminRole. Retained for callers mid-migration. */
+export function isAdminRole(role: string): boolean {
+  return isPlatformAdminRole(role);
+}
+
+/** @deprecated Use PLATFORM_ADMIN_ROLES. */
+export const ADMIN_ROLES: readonly string[] = PLATFORM_ADMIN_ROLES;
 
 // ---------------------------------------------------------------------------
 // API response types (used by server + dashboard)
@@ -283,4 +321,50 @@ export interface AuthContext {
   role: UserRole;
   developerId: string;
   apiKeyId?: string;
+
+  /** Active org membership at the moment the request was authenticated. NULL if unassigned. */
+  activeOrgId?: string | null;
+  /** Active workspace membership at the moment the request was authenticated. */
+  activeWorkspaceId?: string | null;
+  /** Org IDs this user owns (from org_owners join). */
+  ownedOrgIds?: string[];
+  /** Workspace IDs this user owns (from workspace_owners join). */
+  ownedWorkspaceIds?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Organization / workspace / membership types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+}
+
+export interface Workspace {
+  id: string;
+  orgId: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+}
+
+export interface OrgMembership {
+  id: string;
+  userId: string;
+  orgId: string;
+  validFrom: string;
+  validTo: string | null;
+  createdAt: string;
+}
+
+export interface WorkspaceMembership {
+  id: string;
+  userId: string;
+  workspaceId: string;
+  validFrom: string;
+  validTo: string | null;
+  createdAt: string;
 }

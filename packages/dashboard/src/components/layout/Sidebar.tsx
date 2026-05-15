@@ -1,14 +1,18 @@
 import {
-  BarChart3, FolderOpen, Clock, Scale, Building2, Users,
+  BarChart3, FolderOpen, Clock, Scale, Building2, Users, Layers, FileClock,
   ChevronUp, User, Settings, LogOut,
-  Gauge, HelpCircle,
+  Gauge, HelpCircle, AtSign,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
-import { getUser, clearAuth } from '@/api/client';
+import { getUser, clearAuth, isPlatformAdmin, canManage } from '@/api/client';
 
-type Page = 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile' | 'admin-org' | 'admin-team' | 'admin-cost-comparison' | 'settings' | 'developer-detail' | 'help';
+type Page =
+  | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile'
+  | 'admin-org' | 'admin-team' | 'admin-cost-comparison'
+  | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit' | 'manage-domain-rules'
+  | 'settings' | 'developer-detail' | 'help';
 
 interface SidebarProps {
   activePage: Page;
@@ -18,15 +22,18 @@ interface SidebarProps {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  primary_owner: 'Primary Owner',
-  owner: 'Owner',
+  platform_owner: 'Platform Owner',
+  platform_admin: 'Platform Admin',
+  primary_owner: 'Platform Owner', // legacy
+  owner: 'Platform Admin',          // legacy
   developer: 'Developer',
 };
 
 export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps) {
   const health = useHealth();
   const user = getUser();
-  const isAdmin = user?.role === 'primary_owner' || user?.role === 'owner';
+  const isAdmin = isPlatformAdmin(user?.role);
+  const showManageSection = canManage(user);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -100,13 +107,22 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
           <NavItem id="cost-comparison" label="Cost Comparison" icon={Scale} />
         </ul>
 
-        {isAdmin && (
+        {showManageSection && (
           <>
             <div className="label px-1.5 pt-4.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>Organization</div>
             <ul className="flex flex-col gap-0.5">
               <NavItem id="admin-org" label="Overview" icon={Building2} extraActive="developer-detail" />
               <NavItem id="admin-team" label="Team" icon={Users} />
               <NavItem id="admin-cost-comparison" label="Cost Comparison" icon={Scale} />
+            </ul>
+
+            <div className="label px-1.5 pt-4.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>Manage</div>
+            <ul className="flex flex-col gap-0.5">
+              <NavItem id="manage-organizations" label="Organizations" icon={Building2} />
+              <NavItem id="manage-workspaces" label="Workspaces" icon={Layers} />
+              <NavItem id="manage-members" label="Members" icon={Users} />
+              {isAdmin && <NavItem id="manage-domain-rules" label="Domain rules" icon={AtSign} />}
+              <NavItem id="manage-audit" label="Audit log" icon={FileClock} />
             </ul>
           </>
         )}

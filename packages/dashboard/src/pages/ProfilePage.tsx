@@ -60,8 +60,10 @@ function CopyButton({ text }: { text: string }) {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  primary_owner: 'Primary Owner',
-  owner: 'Owner',
+  platform_owner: 'Platform Owner',
+  platform_admin: 'Platform Admin',
+  primary_owner: 'Platform Owner', // legacy
+  owner: 'Platform Admin',          // legacy
   developer: 'Developer',
 };
 

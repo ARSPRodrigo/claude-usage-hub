@@ -23,7 +23,7 @@ import { adminRoutes } from './routes/admin.js';
 import { acceptInvite } from './routes/invitations.js';
 import { profileRoutes } from './routes/profile.js';
 import { downloadRoutes } from './routes/downloads.js';
-import { apiKeyAuth, jwtAuth, requireAdmin } from './middleware/auth.js';
+import { apiKeyAuth, jwtAuth, requireAdminOrOwner } from './middleware/auth.js';
 import { errorHandler } from './middleware/error.js';
 
 /**
@@ -83,8 +83,10 @@ export function createApp(mode: AppMode = 'local'): Hono<AppEnv> {
     app.use('/api/v1/profile/*', jwtAuth);
     app.route('/api/v1/profile', profileRoutes);
 
-    // Admin routes: JWT + admin role (invitations are sub-routes within adminRoutes)
-    app.use('/api/v1/admin/*', jwtAuth, requireAdmin);
+    // Admin routes: JWT + admin-or-owner. Per-route guards (requirePlatformAdmin,
+    // requirePlatformOwner) and handler-level scope checks gate writes more
+    // tightly than the mount allows.
+    app.use('/api/v1/admin/*', jwtAuth, requireAdminOrOwner);
     app.route('/api/v1/admin', adminRoutes);
 
     // Invitation accept — public, token-gated
