@@ -56,6 +56,11 @@ export function markInvitationAccepted(id: string): void {
   db.prepare("UPDATE invitations SET accepted_at = datetime('now') WHERE id = ?").run(id);
 }
 
+export function findInvitationById(id: string): InvitationRow | null {
+  const db = getRawDb();
+  return (db.prepare('SELECT * FROM invitations WHERE id = ?').get(id) as InvitationRow) ?? null;
+}
+
 export function deleteInvitation(id: string): boolean {
   const db = getRawDb();
   const result = db.prepare('DELETE FROM invitations WHERE id = ?').run(id);

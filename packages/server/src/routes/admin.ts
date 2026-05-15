@@ -46,40 +46,17 @@ import {
   createDomainRule,
   deleteDomainRule,
 } from '../db/org-repository.js';
-import { requirePlatformAdmin, requirePlatformOwner } from '../middleware/auth.js';
-import { isPlatformAdminRole } from '@claude-usage-hub/shared';
+import {
+  requirePlatformAdmin,
+  requirePlatformOwner,
+  canAccessOrg,
+  canAccessWorkspace,
+  accessibleOrgIds,
+  isPlatformLike,
+} from '../middleware/auth.js';
 
 const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
 const admin = new Hono<AppEnv>();
-
-// ── Access helpers ──────────────────────────────────────────────────────
-// Platform admin: unrestricted. Org owner: limited to their owned orgs and
-// workspaces in those orgs. These helpers are used inside route handlers.
-
-function isPlatformLike(auth: AuthContext | undefined): boolean {
-  return !!auth && isPlatformAdminRole(auth.role);
-}
-
-function canAccessOrg(auth: AuthContext | undefined, orgId: string): boolean {
-  if (!auth) return false;
-  if (isPlatformLike(auth)) return true;
-  return (auth.ownedOrgIds ?? []).includes(orgId);
-}
-
-function canAccessWorkspace(auth: AuthContext | undefined, wsId: string): boolean {
-  if (!auth) return false;
-  if (isPlatformLike(auth)) return true;
-  const ws = findWorkspaceById(wsId);
-  if (!ws) return false;
-  if ((auth.ownedOrgIds ?? []).includes(ws.orgId)) return true;
-  return (auth.ownedWorkspaceIds ?? []).includes(wsId);
-}
-
-function accessibleOrgIds(auth: AuthContext | undefined): Set<string> | null {
-  // null = unrestricted (platform-like). Set = explicit allow-list.
-  if (!auth || isPlatformLike(auth)) return null;
-  return new Set(auth.ownedOrgIds ?? []);
-}
 
 /** Can the caller view a specific developer's stats? Looks up the developer's
  *  current org membership and checks the caller has access to that org. */

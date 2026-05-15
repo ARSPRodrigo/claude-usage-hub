@@ -14,6 +14,7 @@ import type { AuthContext, UserRole } from '@claude-usage-hub/shared';
 import {
   createInvitation,
   findInvitationByTokenHash,
+  findInvitationById,
   markInvitationAccepted,
   deleteInvitation,
   listInvitations,
@@ -28,7 +29,12 @@ import {
 } from '../db/auth-repository.js';
 import { verifyGoogleToken } from '../services/google-auth.js';
 import { generateApiKey } from '../services/auth-utils.js';
-import { signJwt, getGoogleConfig } from '../middleware/auth.js';
+import {
+  signJwt,
+  getGoogleConfig,
+  canAccessOrg,
+  accessibleOrgIds,
+} from '../middleware/auth.js';
 import {
   findOrganizationById,
   findWorkspaceById,
@@ -74,6 +80,18 @@ invitations.post('/', async (c) => {
     if (orgId && ws.orgId !== orgId) {
       return c.json({ error: 'Workspace does not belong to the chosen organization' }, 400);
     }
+  }
+
+  // Scope check: org owners can only invite into orgs they own. If no orgId
+  // was provided, the invite defaults to 'default' at accept-time — only
+  // platform admins should be able to create those org-less invites.
+  if (!orgId) {
+    const allowed = accessibleOrgIds(auth);
+    if (allowed !== null) {
+      return c.json({ error: 'Specify an organization you own' }, 403);
+    }
+  } else if (!canAccessOrg(auth, orgId)) {
+    return c.json({ error: 'Forbidden: you do not own that organization' }, 403);
   }
 
   // Check if already a registered user
@@ -122,6 +140,8 @@ invitations.post('/bulk', async (c) => {
 
   const origin = new URL(c.req.url).origin;
 
+  const allowed = accessibleOrgIds(auth);
+
   const results = body.invites.map((row) => {
     const email = (row.email ?? '').trim().toLowerCase();
     if (!email) return { email: row.email ?? '', error: 'email is required' };
@@ -137,6 +157,13 @@ invitations.post('/bulk', async (c) => {
       if (!ws) return { email, error: 'Workspace not found' };
       if (orgId && ws.orgId !== orgId) return { email, error: 'Workspace does not belong to the chosen organization' };
     }
+
+    // Scope check (same rules as the single-invite endpoint).
+    if (allowed !== null) {
+      if (!orgId) return { email, error: 'Specify an organization you own' };
+      if (!allowed.has(orgId)) return { email, error: 'Forbidden: you do not own that organization' };
+    }
+
     if (findUserByEmail(email)) return { email, error: 'A user with this email already exists' };
 
     const token = randomBytes(32).toString('hex');
@@ -161,12 +188,18 @@ invitations.post('/bulk', async (c) => {
 
 /** GET /api/v1/admin/invitations — list all invitations, optionally filtered by org/workspace */
 invitations.get('/', (c) => {
+  const auth = c.get('auth') as AuthContext;
   const orgId = c.req.query('orgId');
   const workspaceId = c.req.query('workspaceId');
   const rows = listInvitations();
+  const allowed = accessibleOrgIds(auth);
   return c.json(
     rows
       .filter((r) => {
+        // Org-owner scope: only see invitations into orgs they own.
+        if (allowed !== null) {
+          if (!r.org_id || !allowed.has(r.org_id)) return false;
+        }
         if (orgId && r.org_id !== orgId) return false;
         if (workspaceId && r.workspace_id !== workspaceId) return false;
         return true;
@@ -188,7 +221,20 @@ invitations.get('/', (c) => {
 
 /** DELETE /api/v1/admin/invitations/:id — revoke an invitation */
 invitations.delete('/:id', (c) => {
-  const deleted = deleteInvitation(c.req.param('id'));
+  const auth = c.get('auth') as AuthContext;
+  const id = c.req.param('id') as string;
+  const inv = findInvitationById(id);
+  if (!inv) return c.json({ error: 'Invitation not found' }, 404);
+
+  // Scope check: org owner can only revoke invites into orgs they own.
+  const allowed = accessibleOrgIds(auth);
+  if (allowed !== null) {
+    if (!inv.org_id || !allowed.has(inv.org_id)) {
+      return c.json({ error: 'Forbidden' }, 403);
+    }
+  }
+
+  const deleted = deleteInvitation(id);
   if (!deleted) return c.json({ error: 'Invitation not found' }, 404);
   return c.json({ ok: true });
 });

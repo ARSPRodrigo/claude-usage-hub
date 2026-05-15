@@ -8,6 +8,7 @@ import {
   getActiveWorkspaceMembership,
   listOwnedOrgIds,
   listOwnedWorkspaceIds,
+  findWorkspaceById,
 } from '../db/org-repository.js';
 import { hashApiKey } from '../services/auth-utils.js';
 import type { AppEnv } from '../env.js';
@@ -173,6 +174,40 @@ export async function requirePlatformOwner(c: Context, next: Next): Promise<void
     return c.json({ error: 'Platform owner access required' }, 403);
   }
   await next();
+}
+
+// ── Scope-check helpers (used by route handlers, not middleware) ─────────
+// Platform admin: unrestricted. Org owner: limited to owned orgs and
+// workspaces in those orgs. Workspace-only owners can act on their
+// individual workspaces.
+
+/** True if the auth context has platform_admin / platform_owner authority. */
+export function isPlatformLike(auth: AuthContext | undefined): boolean {
+  return !!auth && isPlatformAdminRole(auth.role);
+}
+
+export function canAccessOrg(auth: AuthContext | undefined, orgId: string): boolean {
+  if (!auth) return false;
+  if (isPlatformLike(auth)) return true;
+  return (auth.ownedOrgIds ?? []).includes(orgId);
+}
+
+export function canAccessWorkspace(auth: AuthContext | undefined, wsId: string): boolean {
+  if (!auth) return false;
+  if (isPlatformLike(auth)) return true;
+  const ws = findWorkspaceById(wsId);
+  if (!ws) return false;
+  if ((auth.ownedOrgIds ?? []).includes(ws.orgId)) return true;
+  return (auth.ownedWorkspaceIds ?? []).includes(wsId);
+}
+
+/**
+ * Returns the set of org IDs the caller can act on, or null for unrestricted
+ * (platform-like) callers. Use this when filtering list endpoints.
+ */
+export function accessibleOrgIds(auth: AuthContext | undefined): Set<string> | null {
+  if (!auth || isPlatformLike(auth)) return null;
+  return new Set(auth.ownedOrgIds ?? []);
 }
 
 /**
