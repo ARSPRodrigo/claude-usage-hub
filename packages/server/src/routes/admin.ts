@@ -42,6 +42,9 @@ import {
   removeOrgOwner,
   addWorkspaceOwner,
   removeWorkspaceOwner,
+  listDomainRules,
+  createDomainRule,
+  deleteDomainRule,
 } from '../db/org-repository.js';
 import { requirePlatformAdmin, requirePlatformOwner } from '../middleware/auth.js';
 import { isPlatformAdminRole } from '@claude-usage-hub/shared';
@@ -646,7 +649,8 @@ admin.delete('/org-owners/:userId/:orgId', (c) => {
   const userId = c.req.param('userId') as string;
   const orgId = c.req.param('orgId') as string;
   if (!canAccessOrg(auth, orgId)) return c.json({ error: 'Forbidden' }, 403);
-  removeOrgOwner(userId, orgId);
+  const result = removeOrgOwner(userId, orgId);
+  if (!result.ok) return c.json({ error: result.reason }, 409);
   writeAudit({
     id: randomUUID(), actorId: auth.userId, targetId: userId,
     action: 'remove_org_owner', scopeId: orgId, scopeType: 'org',
@@ -711,6 +715,40 @@ admin.post('/users/:id/promote-platform-admin', requirePlatformOwner, (c) => {
   return c.json({ ok: true });
 });
 
+/**
+ * POST /api/v1/admin/transfer-platform-owner
+ *   Body: { targetEmail, confirm: targetEmail }  (confirm must equal targetEmail)
+ *
+ *   Transfers the singular platform_owner role to another existing user.
+ *   The current owner is demoted to platform_admin (so they don't lose all
+ *   access by mistake). Platform Owner only.
+ */
+admin.post('/transfer-platform-owner', requirePlatformOwner, async (c) => {
+  const auth = c.get('auth') as AuthContext;
+  const body = await c.req.json() as { targetEmail?: string; confirm?: string };
+  if (!body.targetEmail || !body.confirm) {
+    return c.json({ error: 'targetEmail and confirm are required' }, 400);
+  }
+  if (body.targetEmail.toLowerCase() !== body.confirm.toLowerCase()) {
+    return c.json({ error: 'Confirmation email does not match' }, 400);
+  }
+  if (body.targetEmail.toLowerCase() === auth.email.toLowerCase()) {
+    return c.json({ error: 'Cannot transfer ownership to yourself' }, 400);
+  }
+  const target = findUserByEmail(body.targetEmail.toLowerCase());
+  if (!target) return c.json({ error: 'No user found with that email' }, 404);
+
+  // Two-step: promote target, then demote current owner. Doing it in this
+  // order guarantees there's never zero owners at any instant.
+  updateUserRole(target.id, 'platform_owner');
+  updateUserRole(auth.userId, 'platform_admin');
+  writeAudit({
+    id: randomUUID(), actorId: auth.userId, targetId: target.id,
+    action: 'transfer_platform_owner',
+  });
+  return c.json({ ok: true, newOwnerId: target.id });
+});
+
 admin.post('/users/:id/demote-platform-admin', requirePlatformOwner, (c) => {
   const auth = c.get('auth') as AuthContext;
   const targetId = c.req.param('id') as string;
@@ -727,6 +765,59 @@ admin.post('/users/:id/demote-platform-admin', requirePlatformOwner, (c) => {
   return c.json({ ok: true });
 });
 
+// ── Domain auto-assign rules (Phase 4) ───────────────────────────────────
+
+/** GET /api/v1/admin/domain-rules — platform admin only */
+admin.get('/domain-rules', requirePlatformAdmin, (c) => {
+  return c.json(listDomainRules());
+});
+
+/** POST /api/v1/admin/domain-rules — platform admin only. Body: { emailDomain, orgId, workspaceId } */
+admin.post('/domain-rules', requirePlatformAdmin, async (c) => {
+  const auth = c.get('auth') as AuthContext;
+  const body = await c.req.json() as { emailDomain?: string; orgId?: string; workspaceId?: string };
+  const emailDomain = (body.emailDomain ?? '').trim().toLowerCase();
+  if (!emailDomain || !body.orgId || !body.workspaceId) {
+    return c.json({ error: 'emailDomain, orgId, and workspaceId are required' }, 400);
+  }
+  // Reject leading '@' or anything that looks like a full email — just the
+  // bare domain.
+  if (emailDomain.includes('@') || emailDomain.includes(' ')) {
+    return c.json({ error: 'emailDomain must be a bare domain like "acme.com"' }, 400);
+  }
+  if (!findOrganizationById(body.orgId)) return c.json({ error: 'Organization not found' }, 404);
+  const ws = findWorkspaceById(body.workspaceId);
+  if (!ws) return c.json({ error: 'Workspace not found' }, 404);
+  if (ws.orgId !== body.orgId) {
+    return c.json({ error: 'Workspace does not belong to the chosen organization' }, 400);
+  }
+
+  try {
+    const rule = createDomainRule({ id: randomUUID(), emailDomain, orgId: body.orgId, workspaceId: body.workspaceId });
+    writeAudit({
+      id: randomUUID(), actorId: auth.userId, targetId: auth.userId,
+      action: 'create_domain_rule', scopeId: body.orgId, scopeType: 'org',
+    });
+    return c.json(rule, 201);
+  } catch (err) {
+    // UNIQUE constraint on email_domain
+    return c.json({ error: 'A rule already exists for this domain' }, 409);
+  }
+});
+
+/** DELETE /api/v1/admin/domain-rules/:id — platform admin only */
+admin.delete('/domain-rules/:id', requirePlatformAdmin, (c) => {
+  const auth = c.get('auth') as AuthContext;
+  const id = c.req.param('id') as string;
+  const ok = deleteDomainRule(id);
+  if (!ok) return c.json({ error: 'Rule not found' }, 404);
+  writeAudit({
+    id: randomUUID(), actorId: auth.userId, targetId: auth.userId,
+    action: 'delete_domain_rule',
+  });
+  return c.json({ ok: true });
+});
+
 // ── Audit log (Phase 3a stub; full UI in 3c) ─────────────────────────────
 
 admin.get('/role-audit', (c) => {
@@ -734,21 +825,60 @@ admin.get('/role-audit', (c) => {
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 500);
   const all = listRoleAudit(limit);
   const allowed = accessibleOrgIds(auth);
-  if (allowed === null) return c.json(all);
-  // Org owner: only see scoped entries that fall inside their owned orgs.
-  const owned = allowed;
-  const ownedOrgsOfWs = new Set<string>();
-  for (const wsId of (auth?.ownedWorkspaceIds ?? [])) {
-    const ws = findWorkspaceById(wsId);
-    if (ws) ownedOrgsOfWs.add(ws.id);
-  }
-  return c.json(all.filter((e) => {
-    if (e.scopeType === 'org' && e.scopeId && owned.has(e.scopeId)) return true;
-    if (e.scopeType === 'workspace' && e.scopeId) {
-      const ws = findWorkspaceById(e.scopeId);
-      return !!ws && (owned.has(ws.orgId) || ownedOrgsOfWs.has(e.scopeId));
+
+  const filtered = allowed === null
+    ? all
+    : (() => {
+        const ownedOrgsOfWs = new Set<string>();
+        for (const wsId of (auth?.ownedWorkspaceIds ?? [])) {
+          const ws = findWorkspaceById(wsId);
+          if (ws) ownedOrgsOfWs.add(ws.id);
+        }
+        return all.filter((e) => {
+          if (e.scopeType === 'org' && e.scopeId && allowed.has(e.scopeId)) return true;
+          if (e.scopeType === 'workspace' && e.scopeId) {
+            const ws = findWorkspaceById(e.scopeId);
+            return !!ws && (allowed.has(ws.orgId) || ownedOrgsOfWs.has(e.scopeId));
+          }
+          return false;
+        });
+      })();
+
+  // Resolve actor / target / scope names so the UI doesn't have to look up
+  // UUIDs. Look-ups are cached locally per request.
+  const userCache = new Map<string, { name: string; email: string }>();
+  const orgCache = new Map<string, string>();
+  const wsCache = new Map<string, string>();
+  const resolveUser = (id: string) => {
+    if (!userCache.has(id)) {
+      const u = findUserById(id);
+      userCache.set(id, { name: u?.display_name ?? '(unknown)', email: u?.email ?? '' });
     }
-    return false;
+    return userCache.get(id)!;
+  };
+  const resolveOrg = (id: string) => {
+    if (!orgCache.has(id)) orgCache.set(id, findOrganizationById(id)?.name ?? id);
+    return orgCache.get(id)!;
+  };
+  const resolveWs = (id: string) => {
+    if (!wsCache.has(id)) wsCache.set(id, findWorkspaceById(id)?.name ?? id);
+    return wsCache.get(id)!;
+  };
+
+  return c.json(filtered.map((e) => {
+    const actor = resolveUser(e.actorId);
+    const target = e.targetId === e.actorId ? actor : resolveUser(e.targetId);
+    let scopeName: string | null = null;
+    if (e.scopeId && e.scopeType === 'org') scopeName = resolveOrg(e.scopeId);
+    if (e.scopeId && e.scopeType === 'workspace') scopeName = resolveWs(e.scopeId);
+    return {
+      ...e,
+      actorName: actor.name,
+      actorEmail: actor.email,
+      targetName: target.name,
+      targetEmail: target.email,
+      scopeName,
+    };
   }));
 });
 

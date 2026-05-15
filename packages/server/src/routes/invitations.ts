@@ -99,6 +99,66 @@ invitations.post('/', async (c) => {
   return c.json({ id, email: body.email, inviteUrl, expiresAt, role, orgId, workspaceId }, 201);
 });
 
+/**
+ * POST /api/v1/admin/invitations/bulk
+ *   Body: { invites: [{ email, orgId?, workspaceId?, role? }] }
+ *   Returns: { results: [{ email, inviteUrl?, error?, expiresAt? }] }
+ *
+ *   Processes each row independently — one bad email doesn't fail the batch.
+ *   Reuses the single-invite logic so validation rules stay consistent.
+ */
+invitations.post('/bulk', async (c) => {
+  const auth = c.get('auth') as AuthContext;
+  const body = await c.req.json() as {
+    invites?: Array<{ email?: string; orgId?: string; workspaceId?: string; role?: string }>;
+  };
+
+  if (!Array.isArray(body.invites) || body.invites.length === 0) {
+    return c.json({ error: 'invites array is required and must be non-empty' }, 400);
+  }
+  if (body.invites.length > 500) {
+    return c.json({ error: 'cannot create more than 500 invitations in one request' }, 400);
+  }
+
+  const origin = new URL(c.req.url).origin;
+
+  const results = body.invites.map((row) => {
+    const email = (row.email ?? '').trim().toLowerCase();
+    if (!email) return { email: row.email ?? '', error: 'email is required' };
+    if (email.length > 254) return { email, error: 'email is too long' };
+
+    const role = (row.role === 'owner' || row.role === 'platform_admin') ? 'platform_admin' : 'developer';
+    const orgId = row.orgId ?? null;
+    const workspaceId = row.workspaceId ?? null;
+
+    if (orgId && !findOrganizationById(orgId)) return { email, error: 'Organization not found' };
+    if (workspaceId) {
+      const ws = findWorkspaceById(workspaceId);
+      if (!ws) return { email, error: 'Workspace not found' };
+      if (orgId && ws.orgId !== orgId) return { email, error: 'Workspace does not belong to the chosen organization' };
+    }
+    if (findUserByEmail(email)) return { email, error: 'A user with this email already exists' };
+
+    const token = randomBytes(32).toString('hex');
+    const tokenHash = hashToken(token);
+    const id = randomUUID();
+    const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+    try {
+      createInvitation({
+        id, email, tokenHash, invitedBy: auth.userId, expiresAt, role,
+        orgId, workspaceId,
+      });
+    } catch (err) {
+      return { email, error: err instanceof Error ? err.message : 'Failed to create invitation' };
+    }
+
+    return { email, inviteUrl: `${origin}/invite/accept?token=${token}`, expiresAt, role, orgId, workspaceId };
+  });
+
+  return c.json({ results });
+});
+
 /** GET /api/v1/admin/invitations — list all invitations, optionally filtered by org/workspace */
 invitations.get('/', (c) => {
   const orgId = c.req.query('orgId');

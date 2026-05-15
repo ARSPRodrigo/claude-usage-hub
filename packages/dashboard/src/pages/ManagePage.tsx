@@ -14,13 +14,14 @@ import {
 import { formatRelative } from '@/lib/utils';
 import { useScope } from '@/lib/scope';
 
-export type ManageSection = 'orgs' | 'workspaces' | 'members' | 'audit';
+export type ManageSection = 'orgs' | 'workspaces' | 'members' | 'audit' | 'domain-rules';
 
 const SECTION_META: Record<ManageSection, { title: string; subtitle: string }> = {
-  orgs:       { title: 'Organizations', subtitle: 'Create, rename, and remove organizations.' },
-  workspaces: { title: 'Workspaces',    subtitle: 'Workspaces live inside organizations.' },
-  members:    { title: 'Members',       subtitle: 'Search every member and move them between orgs and workspaces.' },
-  audit:      { title: 'Audit log',     subtitle: 'Recent role and membership changes.' },
+  orgs:           { title: 'Organizations', subtitle: 'Create, rename, and remove organizations.' },
+  workspaces:     { title: 'Workspaces',    subtitle: 'Workspaces live inside organizations.' },
+  members:        { title: 'Members',       subtitle: 'Search every member and move them between orgs and workspaces.' },
+  audit:          { title: 'Audit log',     subtitle: 'Recent role and membership changes.' },
+  'domain-rules': { title: 'Domain rules',  subtitle: 'Auto-assign new sign-ups to an org and workspace by email domain.' },
 };
 
 async function apiPatch<T>(path: string, body: unknown): Promise<T> {
@@ -52,6 +53,7 @@ export function ManagePage({ section }: { section: ManageSection }) {
       {section === 'workspaces' && <WorkspacesTab />}
       {section === 'members' && <MembersTab />}
       {section === 'audit' && <AuditTab />}
+      {section === 'domain-rules' && <DomainRulesTab />}
     </div>
   );
 }
@@ -349,13 +351,38 @@ interface AuditEntry {
   scopeId: string | null;
   scopeType: 'org' | 'workspace' | null;
   timestamp: string;
+  /** Resolved server-side. */
+  actorName?: string;
+  actorEmail?: string;
+  targetName?: string;
+  targetEmail?: string;
+  scopeName?: string | null;
 }
+
+const ACTION_LABELS: Record<string, string> = {
+  create_organization: 'created an organization',
+  rename_organization: 'renamed an organization',
+  delete_organization: 'deleted an organization',
+  create_workspace: 'created a workspace',
+  rename_workspace: 'renamed a workspace',
+  delete_workspace: 'deleted a workspace',
+  move_user: 'moved a member',
+  add_org_owner: 'granted org ownership to',
+  remove_org_owner: 'revoked org ownership from',
+  add_workspace_owner: 'granted workspace ownership to',
+  remove_workspace_owner: 'revoked workspace ownership from',
+  promote_platform_admin: 'promoted to Platform Admin',
+  demote_platform_admin: 'demoted to Developer',
+  transfer_platform_owner: 'transferred platform ownership to',
+};
 
 // ── Members tab ───────────────────────────────────────────────────────────
 
 function MembersTab() {
   const qc = useQueryClient();
   const scope = useScope();
+  const currentUser = getUser();
+  const showTransferButton = isPlatformOwner(currentUser?.role);
   const { data: members = [], isLoading } = useAdminMembers();
   const { data: orgs = [] } = useAdminOrgList();
 
@@ -368,11 +395,16 @@ function MembersTab() {
   }, [scope.orgId]);
   const [movingMember, setMovingMember] = useState<MemberRow | null>(null);
   const [grantingMember, setGrantingMember] = useState<MemberRow | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return members.filter((m) => {
-      if (orgFilter !== 'all' && (m.currentOrgId ?? '') !== orgFilter) return false;
+      if (orgFilter === 'unassigned') {
+        if (m.currentOrgId !== null) return false;
+      } else if (orgFilter !== 'all') {
+        if ((m.currentOrgId ?? '') !== orgFilter) return false;
+      }
       if (!q) return true;
       return (
         m.email.toLowerCase().includes(q) ||
@@ -380,6 +412,8 @@ function MembersTab() {
       );
     });
   }, [members, query, orgFilter]);
+
+  const unassignedCount = useMemo(() => members.filter((m) => m.currentOrgId === null).length, [members]);
 
   const orgById = useMemo(() => new Map(orgs.map((o) => [o.id, o])), [orgs]);
 
@@ -419,8 +453,20 @@ function MembersTab() {
           {orgs.map((o) => (
             <option key={o.id} value={o.id}>{o.name}</option>
           ))}
+          {unassignedCount > 0 && (
+            <option value="unassigned">Unassigned ({unassignedCount})</option>
+          )}
         </select>
         <span className="text-ink-3 text-xs ml-auto">{filtered.length} of {members.length} member{members.length === 1 ? '' : 's'}</span>
+        {showTransferButton && (
+          <button
+            onClick={() => setTransferOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-line rounded-btn text-ink hover:bg-canvas-alt"
+            title="Transfer the platform owner role to another user"
+          >
+            <Shield className="h-3.5 w-3.5" /> Transfer ownership…
+          </button>
+        )}
       </div>
 
       <div className="rounded-card border border-line bg-surface overflow-hidden">
@@ -495,6 +541,19 @@ function MembersTab() {
           member={grantingMember}
           onClose={() => setGrantingMember(null)}
           onChange={invalidateAll}
+        />
+      )}
+
+      {transferOpen && (
+        <TransferOwnerModal
+          onClose={() => setTransferOpen(false)}
+          onTransferred={() => {
+            setTransferOpen(false);
+            invalidateAll();
+            // The current user just became platform_admin — refresh /auth/me
+            // so the UI updates immediately.
+            window.location.reload();
+          }}
         />
       )}
     </div>
@@ -633,6 +692,95 @@ function MoveMemberModal({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
           >
             {move.isPending ? 'Moving…' : isNoop ? 'No change' : 'Move'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Transfer Platform Owner ──────────────────────────────────────────────
+
+function TransferOwnerModal({
+  onClose,
+  onTransferred,
+}: {
+  onClose: () => void;
+  onTransferred: () => void;
+}) {
+  const [targetEmail, setTargetEmail] = useState('');
+  const [confirm, setConfirm] = useState('');
+
+  const transfer = useMutation({
+    mutationFn: () =>
+      apiPost<{ ok: boolean }>('/api/v1/admin/transfer-platform-owner', {
+        targetEmail: targetEmail.trim(),
+        confirm: confirm.trim(),
+      }),
+    onSuccess: onTransferred,
+  });
+
+  const matched = targetEmail.trim() !== '' && targetEmail.trim().toLowerCase() === confirm.trim().toLowerCase();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-surface border border-line rounded-card shadow-popover w-full max-w-md mx-4 p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-[15px] font-medium mb-1">Transfer platform ownership</div>
+        <div className="text-ink-3 text-xs mb-4 leading-relaxed">
+          The new owner gets full platform access. You will be downgraded to
+          Platform Admin (so you keep most access, but cannot transfer
+          ownership again or promote/demote admins). This action is logged
+          in the audit trail.
+        </div>
+
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="label block mb-1.5">New owner's email</label>
+            <input
+              value={targetEmail}
+              onChange={(e) => setTargetEmail(e.target.value)}
+              placeholder="user@example.com"
+              autoComplete="off"
+              className="w-full px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="label block mb-1.5">Confirm by retyping the email</label>
+            <input
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="user@example.com"
+              autoComplete="off"
+              className="w-full px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none"
+            />
+            {targetEmail.trim() !== '' && confirm.trim() !== '' && !matched && (
+              <div className="text-xs text-neg mt-1.5">Emails don't match.</div>
+            )}
+          </div>
+        </div>
+
+        {transfer.isError && (
+          <div className="text-xs text-neg mb-3">
+            {transfer.error instanceof Error ? transfer.error.message : 'Transfer failed.'}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-[13px] text-ink-3 hover:text-ink"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => transfer.mutate()}
+            disabled={!matched || transfer.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
+          >
+            {transfer.isPending ? 'Transferring…' : 'Transfer ownership'}
           </button>
         </div>
       </div>
@@ -890,21 +1038,41 @@ function AuditTab() {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-line">
-              {['When', 'Action', 'Scope'].map((h) => (
+              {['When', 'Who', 'Action', 'Scope'].map((h) => (
                 <th key={h} className="label py-2.5 px-4 text-left">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {entries.map((e, i) => (
-              <tr key={e.id} style={{ borderBottom: i === entries.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
-                <td className="px-4 py-3 text-ink-3 text-xs">{formatRelative(e.timestamp)}</td>
-                <td className="px-4 py-3 mono text-xs">{e.action}</td>
-                <td className="px-4 py-3 text-ink-3 text-xs">
-                  {e.scopeType ? `${e.scopeType}:${e.scopeId}` : '—'}
-                </td>
-              </tr>
-            ))}
+            {entries.map((e, i) => {
+              const verb = ACTION_LABELS[e.action] ?? e.action;
+              const showTarget = e.targetId !== e.actorId;
+              return (
+                <tr key={e.id} style={{ borderBottom: i === entries.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+                  <td className="px-4 py-3 text-ink-3 text-xs whitespace-nowrap">{formatRelative(e.timestamp)}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-[13px]">{e.actorName ?? e.actorId}</div>
+                    {e.actorEmail && <div className="mono text-ink-3 text-[11px] mt-0.5">{e.actorEmail}</div>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-[13px]">
+                      {verb}
+                      {showTarget && (
+                        <span className="text-ink-2"> {e.targetName ?? e.targetId}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-ink-3 text-xs">
+                    {e.scopeName ? (
+                      <span>
+                        {e.scopeName}
+                        <span className="mono text-ink-4 ml-1.5">{e.scopeType}</span>
+                      </span>
+                    ) : '—'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -918,4 +1086,150 @@ function useAdminAuditLog() {
     queryFn: () => apiGet<AuditEntry[]>('/api/v1/admin/role-audit'),
     staleTime: 30_000,
   });
+}
+
+// ── Domain rules tab ──────────────────────────────────────────────────────
+
+interface DomainRuleRow {
+  id: string;
+  emailDomain: string;
+  orgId: string;
+  workspaceId: string;
+}
+
+function DomainRulesTab() {
+  const qc = useQueryClient();
+  const { data: rules = [], isLoading } = useQuery({
+    queryKey: ['admin-domain-rules'],
+    queryFn: () => apiGet<DomainRuleRow[]>('/api/v1/admin/domain-rules'),
+    staleTime: 30_000,
+  });
+  const { data: orgs = [] } = useAdminOrgList();
+
+  const [domain, setDomain] = useState('');
+  const [orgId, setOrgId] = useState('');
+  const [workspaceId, setWorkspaceId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const { data: workspaces = [] } = useWorkspaceList(orgId || null);
+
+  useEffect(() => {
+    if (!orgId && orgs.length > 0) setOrgId(orgs[0].id);
+  }, [orgs, orgId]);
+  useEffect(() => {
+    if (workspaces.length === 0) { setWorkspaceId(''); return; }
+    if (!workspaces.some((w) => w.id === workspaceId)) setWorkspaceId(workspaces[0].id);
+  }, [workspaces, workspaceId]);
+
+  const create = useMutation({
+    mutationFn: () => apiPost<DomainRuleRow>('/api/v1/admin/domain-rules', {
+      emailDomain: domain.trim().toLowerCase().replace(/^@/, ''),
+      orgId,
+      workspaceId,
+    }),
+    onSuccess: () => {
+      setDomain(''); setError(null);
+      void qc.invalidateQueries({ queryKey: ['admin-domain-rules'] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : 'Failed to create rule'),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => apiDelete<{ ok: boolean }>(`/api/v1/admin/domain-rules/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-domain-rules'] }),
+  });
+
+  const orgById = useMemo(() => new Map(orgs.map((o) => [o.id, o])), [orgs]);
+
+  return (
+    <div>
+      <div className="rounded-card border border-line bg-surface mb-4 p-4">
+        <div className="text-[15px] font-medium mb-2.5">Add rule</div>
+        <div className="text-ink-3 text-xs mb-3 leading-relaxed">
+          New sign-ups whose email matches the domain are auto-assigned to the
+          chosen organization and workspace as a Developer. Rules only affect
+          users at first sign-in — existing users are not retroactively moved.
+        </div>
+        <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+          <div>
+            <label className="label block mb-1.5">Email domain</label>
+            <input
+              value={domain}
+              onChange={(e) => { setDomain(e.target.value); setError(null); }}
+              placeholder="acme.com"
+              className="w-full px-2 py-1.5 text-[13px] mono rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="label block mb-1.5">Organization</label>
+            <select
+              value={orgId}
+              onChange={(e) => { setOrgId(e.target.value); setWorkspaceId(''); }}
+              className="w-full px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+            >
+              {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label block mb-1.5">Workspace</label>
+            <select
+              value={workspaceId}
+              onChange={(e) => setWorkspaceId(e.target.value)}
+              disabled={workspaces.length === 0}
+              className="w-full px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink disabled:opacity-50"
+            >
+              {workspaces.length === 0 && <option value="">No workspaces…</option>}
+              {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </div>
+          <button
+            onClick={() => create.mutate()}
+            disabled={!domain.trim() || !orgId || !workspaceId || create.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add
+          </button>
+        </div>
+        {error && <div className="mt-2 text-xs text-neg">{error}</div>}
+      </div>
+
+      <div className="rounded-card border border-line bg-surface overflow-hidden">
+        <div className="px-5 py-4 border-b border-line-2">
+          <div className="text-[15px] font-medium">Active rules</div>
+          <div className="text-ink-3 text-[13px] mt-1">{rules.length} rule{rules.length === 1 ? '' : 's'} configured.</div>
+        </div>
+        {isLoading ? (
+          <div className="p-5 text-sm text-ink-3">Loading…</div>
+        ) : rules.length === 0 ? (
+          <div className="p-5 text-sm text-ink-3">No domain rules yet.</div>
+        ) : (
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-line">
+                {['Domain', 'Organization', 'Workspace', ''].map((h) => (
+                  <th key={h} className="label py-2.5 px-4 text-left">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rules.map((r, i) => (
+                <tr key={r.id} style={{ borderBottom: i === rules.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+                  <td className="px-4 py-3 mono">@{r.emailDomain}</td>
+                  <td className="px-4 py-3">{orgById.get(r.orgId)?.name ?? r.orgId}</td>
+                  <td className="px-4 py-3 mono text-ink-3 text-xs">{r.workspaceId}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => { if (confirm(`Delete rule for @${r.emailDomain}?`)) remove.mutate(r.id); }}
+                      className="p-1.5 text-ink-3 hover:text-neg transition-colors"
+                      title="Delete rule"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
 }

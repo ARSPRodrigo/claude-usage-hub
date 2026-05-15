@@ -95,14 +95,30 @@ export function getActiveWorkspaceMembership(userId: string): WorkspaceMembershi
   };
 }
 
-/** Open new memberships for a user. Closes any existing active membership first. */
+/**
+ * Open new memberships for a user. Closes any existing active membership first
+ * and cascades ownership grants:
+ *   - If the user is moving to a different org, drop their org_owners row for
+ *     the previous org AND any workspace_owners rows in that previous org.
+ *     Rationale: org owners shouldn't retain authority over an org they no
+ *     longer belong to.
+ *   - Workspace ownerships outside the previous org are untouched (they only
+ *     make sense for someone who could move freely between orgs they own,
+ *     which is the platform admin case).
+ *
+ * Returns the previous org/workspace IDs so callers can include them in audit.
+ */
 export function assignUserToWorkspace(
   userId: string,
   orgId: string,
   workspaceId: string,
   now: string = new Date().toISOString(),
-): void {
+): { previousOrgId: string | null; previousWorkspaceId: string | null } {
   const raw = getRawDb();
+  const before: { previousOrgId: string | null; previousWorkspaceId: string | null } = {
+    previousOrgId: getActiveOrgMembership(userId)?.orgId ?? null,
+    previousWorkspaceId: getActiveWorkspaceMembership(userId)?.workspaceId ?? null,
+  };
   raw.transaction(() => {
     raw.prepare(`UPDATE org_memberships SET valid_to = ? WHERE user_id = ? AND valid_to IS NULL`).run(now, userId);
     raw.prepare(`UPDATE workspace_memberships SET valid_to = ? WHERE user_id = ? AND valid_to IS NULL`).run(now, userId);
@@ -112,7 +128,19 @@ export function assignUserToWorkspace(
     raw.prepare(`
       INSERT INTO workspace_memberships (id, user_id, workspace_id, valid_from) VALUES (?, ?, ?, ?)
     `).run(randomUUID(), userId, workspaceId, now);
+
+    // Cascade ownership revocation when leaving an org.
+    if (before.previousOrgId && before.previousOrgId !== orgId) {
+      raw.prepare(`DELETE FROM org_owners WHERE user_id = ? AND org_id = ?`)
+        .run(userId, before.previousOrgId);
+      raw.prepare(`
+        DELETE FROM workspace_owners
+        WHERE user_id = ?
+          AND workspace_id IN (SELECT id FROM workspaces WHERE org_id = ?)
+      `).run(userId, before.previousOrgId);
+    }
   })();
+  return before;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,9 +182,29 @@ export function addOrgOwner(userId: string, orgId: string): void {
   raw.prepare(`INSERT OR IGNORE INTO org_owners (user_id, org_id) VALUES (?, ?)`).run(userId, orgId);
 }
 
-export function removeOrgOwner(userId: string, orgId: string): void {
+/**
+ * Remove an org_owners grant.
+ *
+ * Refuses to remove the LAST owner of an org unless `force` is set —
+ * leaving an org ownerless means only platform admins can manage it,
+ * which is usually a mistake. Platform admin callers can pass force=true
+ * if they really mean it.
+ */
+export function removeOrgOwner(
+  userId: string,
+  orgId: string,
+  opts: { force?: boolean } = {},
+): { ok: boolean; reason?: string } {
   const raw = getRawDb();
+  if (!opts.force) {
+    const row = raw.prepare(`SELECT COUNT(*) AS c FROM org_owners WHERE org_id = ?`).get(orgId) as { c: number };
+    const currentlyOwner = raw.prepare(`SELECT 1 FROM org_owners WHERE user_id = ? AND org_id = ?`).get(userId, orgId);
+    if (currentlyOwner && row.c <= 1) {
+      return { ok: false, reason: 'Cannot remove the last owner of an organization. Grant ownership to someone else first, or use force.' };
+    }
+  }
   raw.prepare(`DELETE FROM org_owners WHERE user_id = ? AND org_id = ?`).run(userId, orgId);
+  return { ok: true };
 }
 
 export function addWorkspaceOwner(userId: string, workspaceId: string): void {
@@ -164,6 +212,12 @@ export function addWorkspaceOwner(userId: string, workspaceId: string): void {
   raw.prepare(`INSERT OR IGNORE INTO workspace_owners (user_id, workspace_id) VALUES (?, ?)`).run(userId, workspaceId);
 }
 
+/**
+ * Remove a workspace_owners grant.
+ *
+ * Unlike org owners, workspaces are allowed to have zero direct owners
+ * (the parent org owner can still manage them). So no last-owner check.
+ */
 export function removeWorkspaceOwner(userId: string, workspaceId: string): void {
   const raw = getRawDb();
   raw.prepare(`DELETE FROM workspace_owners WHERE user_id = ? AND workspace_id = ?`).run(userId, workspaceId);
@@ -372,4 +426,26 @@ export function findDomainRuleForEmail(email: string): DomainRule | null {
   `).get(domain) as { id: string; email_domain: string; org_id: string; workspace_id: string } | undefined;
   if (!row) return null;
   return { id: row.id, emailDomain: row.email_domain, orgId: row.org_id, workspaceId: row.workspace_id };
+}
+
+export function listDomainRules(): DomainRule[] {
+  const raw = getRawDb();
+  const rows = raw.prepare(`
+    SELECT id, email_domain, org_id, workspace_id FROM domain_rules ORDER BY email_domain
+  `).all() as Array<{ id: string; email_domain: string; org_id: string; workspace_id: string }>;
+  return rows.map((r) => ({ id: r.id, emailDomain: r.email_domain, orgId: r.org_id, workspaceId: r.workspace_id }));
+}
+
+export function createDomainRule(args: { id: string; emailDomain: string; orgId: string; workspaceId: string }): DomainRule {
+  const raw = getRawDb();
+  raw.prepare(`
+    INSERT INTO domain_rules (id, email_domain, org_id, workspace_id) VALUES (?, ?, ?, ?)
+  `).run(args.id, args.emailDomain.toLowerCase(), args.orgId, args.workspaceId);
+  return { id: args.id, emailDomain: args.emailDomain.toLowerCase(), orgId: args.orgId, workspaceId: args.workspaceId };
+}
+
+export function deleteDomainRule(id: string): boolean {
+  const raw = getRawDb();
+  const result = raw.prepare(`DELETE FROM domain_rules WHERE id = ?`).run(id);
+  return result.changes > 0;
 }

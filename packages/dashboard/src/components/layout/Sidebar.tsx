@@ -1,7 +1,7 @@
 import {
   BarChart3, FolderOpen, Clock, Scale, Building2, Users, Layers, FileClock,
   ChevronUp, User, Settings, LogOut,
-  Gauge, HelpCircle,
+  Gauge, HelpCircle, AtSign,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -11,7 +11,7 @@ import { getUser, clearAuth, isPlatformAdmin, canManage } from '@/api/client';
 type Page =
   | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile'
   | 'admin-org' | 'admin-team' | 'admin-cost-comparison'
-  | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit'
+  | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit' | 'manage-domain-rules'
   | 'settings' | 'developer-detail' | 'help';
 
 interface SidebarProps {
@@ -121,6 +121,7 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
               <NavItem id="manage-organizations" label="Organizations" icon={Building2} />
               <NavItem id="manage-workspaces" label="Workspaces" icon={Layers} />
               <NavItem id="manage-members" label="Members" icon={Users} />
+              {isAdmin && <NavItem id="manage-domain-rules" label="Domain rules" icon={AtSign} />}
               <NavItem id="manage-audit" label="Audit log" icon={FileClock} />
             </ul>
           </>

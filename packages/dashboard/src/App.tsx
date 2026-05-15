@@ -22,7 +22,7 @@ import { useQueryClient } from '@tanstack/react-query';
 export type InnerPage =
   | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile'
   | 'admin-org' | 'admin-team' | 'admin-cost-comparison'
-  | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit'
+  | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit' | 'manage-domain-rules'
   | 'settings' | 'developer-detail' | 'help';
 
 const PAGE_LABELS: Record<InnerPage, string> = {
@@ -39,6 +39,7 @@ const PAGE_LABELS: Record<InnerPage, string> = {
   'manage-workspaces': 'WORKSPACES',
   'manage-members': 'MEMBERS',
   'manage-audit': 'AUDIT LOG',
+  'manage-domain-rules': 'DOMAIN RULES',
   'developer-detail': 'DEVELOPER',
   help: 'HELP',
 };
@@ -59,6 +60,7 @@ function pathnameToPage(pathname: string): InnerPage | null {
   if (pathname === '/manage/workspaces') return 'manage-workspaces';
   if (pathname === '/manage/members') return 'manage-members';
   if (pathname === '/manage/audit') return 'manage-audit';
+  if (pathname === '/manage/domain-rules') return 'manage-domain-rules';
   // Legacy alias from before the Manage split — redirect target.
   if (pathname === '/admin/manage') return 'manage-organizations';
   if (pathname === '/admin/org') return 'admin-org';
@@ -165,6 +167,7 @@ export default function App() {
     'manage-workspaces': '/manage/workspaces',
     'manage-members': '/manage/members',
     'manage-audit': '/manage/audit',
+    'manage-domain-rules': '/manage/domain-rules',
     profile: '/profile',
     'admin-org': '/admin/org',
     'admin-team': '/admin/team',
@@ -241,6 +244,7 @@ export default function App() {
           {currentPage === 'manage-workspaces' && <ManagePage section="workspaces" />}
           {currentPage === 'manage-members' && <ManagePage section="members" />}
           {currentPage === 'manage-audit' && <ManagePage section="audit" />}
+          {currentPage === 'manage-domain-rules' && <ManagePage section="domain-rules" />}
           {currentPage === 'profile' && <ProfilePage />}
           {currentPage === 'admin-org' && (
             <AdminOrgPage onSelectDeveloper={handleSelectDeveloper} />
