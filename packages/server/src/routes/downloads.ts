@@ -130,11 +130,14 @@ downloads.get('/install.ps1', (c) => {
   c.header('Cache-Control', 'no-store');
   const origin = new URL(c.req.url).origin;
   const script = `#Requires -Version 5.1
+param([string]$ApiKey = $env:CHUB_API_KEY)
+
 $ErrorActionPreference = 'Stop'
 
 # --- Elevation check -----------------------------------------------------------
 # Installing a Windows Service requires Administrator rights.
-# If not elevated, re-launch this script with elevation automatically.
+# If not elevated, re-launch this script with elevation. Passes -ApiKey
+# explicitly because env vars don't propagate through Start-Process -Verb RunAs.
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Restarting as Administrator (required for Windows Service registration)..."
     # PSCommandPath is set only when the script is saved to disk (not piped).
@@ -142,17 +145,19 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
         Write-Error "This script must be saved to a file before running. See usage below."
         exit 1
     }
-    $argList = "-ExecutionPolicy Bypass -File \`"$PSCommandPath\`""
-    if ($env:CHUB_API_KEY) { $argList += " -ApiKey \`"$env:CHUB_API_KEY\`"" }
-    Start-Process powershell -Verb RunAs -ArgumentList $argList
+    # Array-form -ArgumentList: PowerShell handles quoting safely.
+    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    if ($ApiKey) { $argList += @('-ApiKey', $ApiKey) }
+    Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $argList
     exit 0
 }
 
-param([string]$ApiKey = $env:CHUB_API_KEY)
-
-$ServerUrl = "${origin}"
-$ChubDir   = "$env:APPDATA\\claude-usage-hub"
-$LogDir    = "$ChubDir\\logs"
+$ServerUrl    = "${origin}"
+$ChubDir      = "$env:APPDATA\\claude-usage-hub"
+# Logs live under the user's profile (the collector uses os.homedir() which
+# resolves to USERPROFILE on Windows). APPDATA is just where we cache the
+# downloaded collector binary.
+$LogDir       = "$env:USERPROFILE\\.claude-usage-hub\\logs"
 
 New-Item -ItemType Directory -Force -Path $ChubDir | Out-Null
 New-Item -ItemType Directory -Force -Path $LogDir  | Out-Null
