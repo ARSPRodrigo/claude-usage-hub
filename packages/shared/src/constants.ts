@@ -10,7 +10,7 @@ export const KNOWN_MODELS = [MODELS.OPUS, MODELS.SONNET, MODELS.HAIKU] as const;
 
 /** Default collector configuration values. */
 export const DEFAULTS = {
-  INTERVAL_MINUTES: 30,
+  INTERVAL_MINUTES: 5,
   CLAUDE_DATA_PATH: '~/.claude/projects',
   CLAUDE_STATS_PATH: '~/.claude/stats-cache.json',
   COLLECTOR_CONFIG_DIR: '~/.claude-usage-hub',
