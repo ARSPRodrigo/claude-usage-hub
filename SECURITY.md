@@ -32,13 +32,17 @@ The server binds to `127.0.0.1` (localhost only) and is not accessible from othe
 
 ### Authentication
 
-- **Google OAuth** — login is restricted to a single configured Google Workspace domain (`ALLOWED_DOMAIN`). Anyone outside that domain is rejected at sign-in.
+Two authentication methods are available:
+
+- **Google OAuth** — login is restricted to a single configured Google Workspace domain (`ALLOWED_DOMAIN`). Anyone outside that domain is rejected at sign-in. This is the recommended method for production.
+- **Password login** — when `GOOGLE_CLIENT_ID` is not set, the login page shows an email/password form instead. This is intended for Docker-only setups, local testing, and environments without Google Workspace. If `GOOGLE_CLIENT_ID` is set, the password form is never shown in the UI.
 - **JWT sessions** — HS256 tokens signed with `JWT_SECRET`, expire after 24 hours. Tokens are verified on every authenticated request.
 - **API keys** — collector agents authenticate with `chub_`-prefixed keys. Keys are stored as SHA-256 hashes only — the raw key is shown once at creation and never stored.
 
 ### Authorization
 
-- **Role-based access** — Developers can only read their own usage data. Owners and Primary Owners see all members' data.
+- **Role-based access** — three roles exist: `platform_owner` (full admin), `platform_admin` (admin access, cannot manage other owners), and `developer` (can only read their own usage data).
+- **Org/workspace scoping** — users are assigned to organizations and workspaces. Usage data, member lists, and admin actions are scoped to the caller's active org/workspace. Platform owners can see all organizations.
 - **Ingest scoping** — the server resolves the developer identity from the authenticated API key, not from the payload. A collector cannot submit data under a different developer's identity.
 
 ### Transport
@@ -54,7 +58,8 @@ The server binds to `127.0.0.1` (localhost only) and is not accessible from othe
 ### Operational recommendations
 
 - Use a strong, randomly generated `JWT_SECRET` (e.g., `openssl rand -hex 32`)
-- Change `ADMIN_PASSWORD` immediately after first login and disable password login if all owners use Google OAuth
+- If using Google OAuth (`GOOGLE_CLIENT_ID` is set), the password form is not shown — no additional action is needed to disable it
+- If using password login (no `GOOGLE_CLIENT_ID`), change `ADMIN_PASSWORD` immediately after first login and treat it like a root credential
 - Restrict network access to port 8080 — only your developers and the TLS terminator need to reach it
 - Set `RETENTION_DAYS` to limit how long usage data is retained
 - Run `pnpm audit` periodically to check dependencies for known vulnerabilities
@@ -71,6 +76,9 @@ The server binds to `127.0.0.1` (localhost only) and is not accessible from othe
 | Cost estimates | SQLite |
 | API key hashes + prefixes | SQLite |
 | Admin password hash (scrypt) | SQLite |
+| Organization and workspace definitions | SQLite |
+| Org/workspace membership assignments | SQLite |
+| Role change audit log | SQLite |
 | Collector config (developer ID, salt, server URL) | `~/.claude-usage-hub/config.json` |
 | File read cursors | `~/.claude-usage-hub/cursors.json` |
 | Project alias mappings | `~/.claude-usage-hub/aliases.json` |
