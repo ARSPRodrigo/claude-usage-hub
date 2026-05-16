@@ -89,6 +89,9 @@ COPY --from=dashboard-build /build/packages/dashboard/dist packages/dashboard/di
 # Collector bundle — served at /download/collector.js
 COPY --from=collector-build /build/packages/collector/dist/collector.bundle.cjs packages/collector/dist/collector.bundle.cjs
 
+# NSSM binary — served at /download/nssm.exe for the Windows installer.
+COPY --from=collector-build /build/packages/collector/vendor/nssm.exe packages/collector/vendor/nssm.exe
+
 # Data directory for SQLite + logs
 RUN mkdir -p /data && chown node:node /data
 
@@ -100,6 +103,7 @@ ENV NODE_ENV=production \
     PORT=8080 \
     DB_PATH=/data/usage.db \
     DASHBOARD_DIST_PATH=/app/packages/dashboard/dist \
-    COLLECTOR_BUNDLE_PATH=/app/packages/collector/dist/collector.bundle.cjs
+    COLLECTOR_BUNDLE_PATH=/app/packages/collector/dist/collector.bundle.cjs \
+    NSSM_PATH=/app/packages/collector/vendor/nssm.exe
 
 CMD ["node", "packages/server/dist/server.js"]
