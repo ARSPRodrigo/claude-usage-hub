@@ -3,15 +3,18 @@ import {
   detectPlatform,
   buildLaunchdPlist,
   buildSystemdService,
-  buildWindowsTaskXml,
+  buildNssmCommands,
   DAEMON_LABEL,
+  WINDOWS_SERVICE_NAME,
   launchdPlistPath,
   systemdServicePath,
+  nssmExePath,
 } from '../daemon.js';
 
 const NODE = '/usr/local/bin/node';
 const CLI = '/home/alice/.claude-usage-hub/dist/cli.js';
 const LOG_DIR = '/home/alice/.claude-usage-hub/logs';
+const USER_PROFILE = '/home/alice';
 
 describe('daemon', () => {
   describe('detectPlatform', () => {
@@ -57,21 +60,69 @@ describe('daemon', () => {
     });
   });
 
-  describe('buildWindowsTaskXml', () => {
-    it('produces a Task Scheduler XML with correct command', () => {
-      const xml = buildWindowsTaskXml(NODE, CLI);
-      expect(xml).toContain('<?xml version="1.0"');
-      expect(xml).toContain(NODE);
-      expect(xml).toContain(CLI);
-      expect(xml).toContain('<LogonTrigger>');
-      expect(xml).toContain('<Enabled>true</Enabled>');
-      // Should not stop when going on battery
-      expect(xml).toContain('<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>');
+  describe('buildNssmCommands', () => {
+    const cmds = buildNssmCommands(WINDOWS_SERVICE_NAME, NODE, `"${CLI}" run`, LOG_DIR, USER_PROFILE);
+
+    it('produces exactly 8 commands', () => {
+      expect(cmds).toHaveLength(8);
     });
 
-    it('sets infinite execution time limit', () => {
-      const xml = buildWindowsTaskXml(NODE, CLI);
-      expect(xml).toContain('<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>');
+    it('first command installs the service with executable and args', () => {
+      const install = cmds[0];
+      expect(install?.cmd).toBe('install');
+      expect(install?.args).toContain(WINDOWS_SERVICE_NAME);
+      expect(install?.args).toContain(NODE);
+    });
+
+    it('sets AppStdout log path', () => {
+      const stdoutCmd = cmds.find((c) => c.args.includes('AppStdout'));
+      expect(stdoutCmd).toBeDefined();
+      expect(stdoutCmd?.args.some((a) => a.includes('collector.log'))).toBe(true);
+    });
+
+    it('sets AppStderr log path', () => {
+      const stderrCmd = cmds.find((c) => c.args.includes('AppStderr'));
+      expect(stderrCmd).toBeDefined();
+      expect(stderrCmd?.args.some((a) => a.includes('collector-error.log'))).toBe(true);
+    });
+
+    it('sets AppRestartDelay', () => {
+      const delayCmd = cmds.find((c) => c.args.includes('AppRestartDelay'));
+      expect(delayCmd?.args).toContain('30000');
+    });
+
+    it('sets all environment variables in a SINGLE AppEnvironmentExtra command', () => {
+      const envCmds = cmds.filter((c) => c.args.includes('AppEnvironmentExtra'));
+      // Must be exactly one call — multiple calls overwrite each other in the registry.
+      expect(envCmds).toHaveLength(1);
+      const envCmd = envCmds[0]!;
+      const envArgs = envCmd.args.join(' ');
+      expect(envArgs).toContain('USERPROFILE=');
+      expect(envArgs).toContain('HOME=');
+      expect(envArgs).toContain('HOMEPATH=');
+    });
+
+    it('USERPROFILE is set to the userProfile argument', () => {
+      const envCmd = cmds.find((c) => c.args.includes('AppEnvironmentExtra'))!;
+      expect(envCmd.args.some((a) => a.startsWith(`USERPROFILE=${USER_PROFILE}`))).toBe(true);
+    });
+
+    it('last command starts the service', () => {
+      const last = cmds[cmds.length - 1];
+      expect(last?.cmd).toBe('start');
+      expect(last?.args).toContain(WINDOWS_SERVICE_NAME);
+    });
+  });
+
+  describe('constants', () => {
+    it('WINDOWS_SERVICE_NAME is defined and non-empty', () => {
+      expect(typeof WINDOWS_SERVICE_NAME).toBe('string');
+      expect(WINDOWS_SERVICE_NAME.length).toBeGreaterThan(0);
+    });
+
+    it('DAEMON_LABEL is defined and non-empty', () => {
+      expect(typeof DAEMON_LABEL).toBe('string');
+      expect(DAEMON_LABEL.length).toBeGreaterThan(0);
     });
   });
 
@@ -87,6 +138,12 @@ describe('daemon', () => {
       const p = systemdServicePath();
       expect(p).toContain(DAEMON_LABEL);
       expect(p.endsWith('.service')).toBe(true);
+    });
+
+    it('nssmExePath contains .claude-usage-hub and ends with nssm.exe', () => {
+      const p = nssmExePath();
+      expect(p).toContain('.claude-usage-hub');
+      expect(p.endsWith('nssm.exe')).toBe(true);
     });
   });
 });

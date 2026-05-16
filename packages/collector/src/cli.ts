@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import { COLLECTOR_VERSION } from '@claude-usage-hub/shared';
-import { loadConfig, saveConfig, generateDefaultConfig, getConfigDir, getLastUploadTime } from './config.js';
+import { loadConfig, saveConfig, generateDefaultConfig, getConfigDir, getLastUploadTime, expandHome } from './config.js';
 import { runOnce, runLoop } from './index.js';
 
 const program = new Command();
@@ -94,6 +94,14 @@ program
       config.claudeDataPath = opts.dataPath;
     }
 
+    // On Windows, expand ~ to an absolute path immediately so the config file
+    // has a fully-qualified path. This ensures the Windows Service (running as
+    // LocalSystem) can resolve the path correctly via the USERPROFILE env var
+    // we set in NSSM — rather than relying on runtime tilde expansion.
+    if (process.platform === 'win32' && config.claudeDataPath.startsWith('~')) {
+      config.claudeDataPath = expandHome(config.claudeDataPath);
+    }
+
     // Verify connectivity and fetch server-assigned developerId
     if (!opts.skipCheck) {
       process.stdout.write(`Checking connection to ${opts.server}... `);
@@ -182,7 +190,7 @@ program
     }
 
     console.log(`Installing daemon for platform: ${detectPlatform()}`);
-    const result = install();
+    const result = await install();
 
     if (result.ok) {
       console.log('Daemon installed and started successfully.');
@@ -206,7 +214,7 @@ program
       return;
     }
 
-    const result = uninstall();
+    const result = await uninstall();
     if (result.ok) {
       console.log('Daemon stopped and removed.');
     } else {

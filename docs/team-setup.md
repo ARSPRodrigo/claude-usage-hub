@@ -69,12 +69,20 @@ When the developer clicks the invite link:
 curl -sSL https://your-server/install.sh | CHUB_API_KEY=chub_xxx sh
 ```
 
-**Windows (PowerShell):**
+**Windows (PowerShell — must run as Administrator):**
 ```powershell
-$env:CHUB_API_KEY='chub_xxx'; irm https://your-server/install.ps1 | iex
+# Save the script to a file first (piping to iex is blocked by corporate policy)
+$env:CHUB_API_KEY = 'chub_xxx'
+Invoke-WebRequest -Uri "https://your-server/install.ps1" -OutFile "$env:TEMP\install-chub.ps1" -UseBasicParsing
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\install-chub.ps1"
 ```
 
-The installer downloads the collector from the server, initializes the config, and registers a background daemon (launchd on macOS, systemd on Linux, Task Scheduler on Windows). Node.js >= 18 must be installed on the developer's machine.
+The installer downloads the collector from the server, initializes the config, and registers a background daemon:
+- **macOS**: launchd `LaunchAgent` (starts on login, restarts on crash)
+- **Linux**: systemd user service (starts on login, restarts on crash)
+- **Windows**: NSSM Windows Service (starts on **boot**, restarts on crash — no login required)
+
+Node.js ≥ 18 must be installed on the developer's machine.
 
 ### Manual setup (without the install script)
 

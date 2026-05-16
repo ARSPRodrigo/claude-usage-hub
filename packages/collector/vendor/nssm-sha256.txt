@@ -1,0 +1,4 @@
+# SHA-256 of nssm.exe (NSSM 2.24, win64).
+# Run: shasum -a 256 nssm.exe | tee nssm-sha256.txt
+# Then update NSSM_SHA256 in packages/collector/src/daemon.ts to match.
+# (placeholder — populate once nssm.exe is added)

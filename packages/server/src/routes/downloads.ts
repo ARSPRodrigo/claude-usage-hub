@@ -14,6 +14,13 @@ function getCollectorBundlePath(): string {
   );
 }
 
+function getNssmPath(): string {
+  return (
+    process.env['NSSM_PATH'] ??
+    resolve(__dirname, '../../../../collector/vendor/nssm.exe')
+  );
+}
+
 /** GET /download/collector.js — serve the bundled collector agent */
 downloads.get('/download/collector.js', (c) => {
   const bundlePath = getCollectorBundlePath();
@@ -23,6 +30,19 @@ downloads.get('/download/collector.js', (c) => {
   const content = readFileSync(bundlePath, 'utf-8');
   c.header('Content-Type', 'application/javascript; charset=utf-8');
   c.header('Content-Disposition', 'attachment; filename="collector.js"');
+  c.header('Cache-Control', 'no-store');
+  return c.body(content);
+});
+
+/** GET /download/nssm.exe — serve NSSM for Windows Service registration */
+downloads.get('/download/nssm.exe', (c) => {
+  const nssmPath = getNssmPath();
+  if (!existsSync(nssmPath)) {
+    return c.json({ error: 'nssm.exe not available on this server' }, 404);
+  }
+  const content = readFileSync(nssmPath);
+  c.header('Content-Type', 'application/octet-stream');
+  c.header('Content-Disposition', 'attachment; filename="nssm.exe"');
   c.header('Cache-Control', 'no-store');
   return c.body(content);
 });
@@ -82,49 +102,77 @@ echo "View logs:     tail -f $LOG_DIR/collector.log"
 downloads.get('/install.ps1', (c) => {
   c.header('Cache-Control', 'no-store');
   const origin = new URL(c.req.url).origin;
-  const script = `$ErrorActionPreference = 'Stop'
+  const script = `#Requires -Version 5.1
+$ErrorActionPreference = 'Stop'
+
+# --- Elevation check -----------------------------------------------------------
+# Installing a Windows Service requires Administrator rights.
+# If not elevated, re-launch this script with elevation automatically.
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "Restarting as Administrator (required for Windows Service registration)..."
+    # PSCommandPath is set only when the script is saved to disk (not piped).
+    if (-not $PSCommandPath) {
+        Write-Error "This script must be saved to a file before running. See usage below."
+        exit 1
+    }
+    $argList = "-ExecutionPolicy Bypass -File \`"$PSCommandPath\`""
+    if ($env:CHUB_API_KEY) { $argList += " -ApiKey \`"$env:CHUB_API_KEY\`"" }
+    Start-Process powershell -Verb RunAs -ArgumentList $argList
+    exit 0
+}
+
+param([string]$ApiKey = $env:CHUB_API_KEY)
 
 $ServerUrl = "${origin}"
-$ChubDir = "$env:APPDATA\\claude-usage-hub"
-$CollectorPath = "$ChubDir\\collector.js"
-$LogDir = "$ChubDir\\logs"
+$ChubDir   = "$env:APPDATA\\claude-usage-hub"
+$LogDir    = "$ChubDir\\logs"
 
 New-Item -ItemType Directory -Force -Path $ChubDir | Out-Null
-New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+New-Item -ItemType Directory -Force -Path $LogDir  | Out-Null
 
-if (-not $env:CHUB_API_KEY) {
-    Write-Error "CHUB_API_KEY environment variable is required."
-    Write-Host ""
-    Write-Host "Usage:"
-    Write-Host "  \$env:CHUB_API_KEY='chub_xxx'; irm $ServerUrl/install.ps1 | iex"
+if (-not $ApiKey) {
+    Write-Host @"
+CHUB_API_KEY is required.
+
+Usage (save to file first, then run):
+  Invoke-WebRequest -Uri "$ServerUrl/install.ps1" -OutFile "$env:TEMP\\install-chub.ps1" -UseBasicParsing
+  \$env:CHUB_API_KEY = 'chub_xxx'
+  powershell -ExecutionPolicy Bypass -File "$env:TEMP\\install-chub.ps1"
+"@
     exit 1
 }
 
+# Require Node.js >= 18
 try {
     $nodeVersion = node -e "process.stdout.write(process.versions.node)" 2>$null
-    $nodeMajor = [int]($nodeVersion -split '\\.')[0]
+    $nodeMajor   = [int]($nodeVersion -split '\\.')[0]
     if ($nodeMajor -lt 18) {
         Write-Error "Node.js 18 or newer is required (found v$nodeVersion)."
         exit 1
     }
 } catch {
-    Write-Error "Node.js is required but not found. Install Node.js 18+ and try again."
+    Write-Error "Node.js is required but not found. Install Node.js 18+ from https://nodejs.org and try again."
     exit 1
 }
+
+$CollectorPath = "$ChubDir\\collector.js"
 
 Write-Host "Downloading collector..."
 Invoke-WebRequest -Uri "$ServerUrl/download/collector.js" -OutFile $CollectorPath -UseBasicParsing
 
 Write-Host "Initializing..."
-node $CollectorPath init --server $ServerUrl --api-key $env:CHUB_API_KEY
+node $CollectorPath init --server $ServerUrl --api-key $ApiKey
 
-Write-Host "Installing daemon..."
+Write-Host "Installing Windows Service (via NSSM)..."
 node $CollectorPath install
 
 Write-Host ""
-Write-Host "Done! The collector daemon is now running."
-Write-Host "Check status:  node $CollectorPath status --check"
-Write-Host "View logs:     Get-Content $LogDir\\collector.log -Wait"
+Write-Host "Done! The collector is now running as a Windows Service."
+Write-Host "It starts automatically on boot and restarts on crash."
+Write-Host ""
+Write-Host "Check service status:  sc query ClaudeUsageHubCollector"
+Write-Host "Check upload status:   node \`"$CollectorPath\`" status --check"
+Write-Host "View logs:             Get-Content \`"$LogDir\\collector.log\`" -Wait"
 `;
   c.header('Content-Type', 'text/plain; charset=utf-8');
   return c.body(script);
