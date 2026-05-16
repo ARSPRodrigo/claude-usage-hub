@@ -2,13 +2,21 @@
 
 A self-hosted, open-source tool for monitoring Claude Code token usage across your entire team. Track token consumption, cost breakdowns, and per-developer visibility — all from a central web dashboard.
 
-> **v1.0.0** — Multi-org support, workspaces, team leaderboard, cost comparison, and the Signal UI redesign.
+> **v1.0.0** — Multi-org support, workspaces, role hierarchy, team leaderboard, cost comparison, and the Signal UI redesign.
 
 ## Screenshots
 
 ### Dashboard
 ![Dashboard — Light](docs/screenshots/dashboard-light.png)
 ![Dashboard — Dark](docs/screenshots/dashboard-dark.png)
+
+### Leaderboard
+![Leaderboard — Light](docs/screenshots/leaderboard-light.png)
+![Leaderboard — Dark](docs/screenshots/leaderboard-dark.png)
+
+### Cost Comparison
+![Cost Comparison — Light](docs/screenshots/cost-comparison-light.png)
+![Cost Comparison — Dark](docs/screenshots/cost-comparison-dark.png)
 
 ### Sessions
 ![Sessions](docs/screenshots/sessions-light.png)
@@ -27,29 +35,36 @@ A self-hosted, open-source tool for monitoring Claude Code token usage across yo
 
 ## Features
 
-### Both modes
+### Personal usage (all modes)
 - **Token analytics** — input, output, cache creation, cache read broken down by model
 - **Cost estimation** — based on official Anthropic pricing (Opus 4.6, Sonnet 4.6, Haiku 4.5)
+- **Cost comparison** — see what your usage would have cost at each model tier; break-even analysis
 - **Session & project tracking** — opaque aliases protect actual file paths and content
 - **Multiple time ranges** — 5h / 24h / 7d / 30d / all-time
 - **Dark / light mode** — follows system preference, manually toggleable
 - **Privacy-first** — no conversation content is ever read or stored
 
 ### Team mode
-- **Google OAuth** — restricted to your org domain
-- **Role-based access** — Primary Owner / Owner / Developer
+- **Team leaderboard** — all members see each other ranked by token consumption; top 3 get gold/silver/bronze indicators; current user highlighted
+- **Google OAuth** — sign-in restricted to your configured org domain
+- **Password login fallback** — when Google OAuth is not configured, a username/password form is shown (useful for Docker-only setups)
+- **Role-based access** — Platform Owner / Platform Admin / Developer
+- **Multi-organization support** — create and manage multiple organizations with independent member lists and usage scopes
+- **Workspaces** — subdivide organizations into workspaces; usage data scoped accordingly
 - **Invite links** — 7-day one-time invite URLs, role assigned at invite time
+- **Domain rules** — auto-assign new Google sign-ins to an org/workspace based on email domain
 - **Per-developer dashboard** — owners see all members, developers see their own data
 - **Per-machine tracking** — each API key tracked independently
 - **Data management** — owners can wipe per-member or per-machine usage data
 - **Data retention** — configurable automatic pruning
+- **Audit log** — full history of role changes, invites, and admin actions
 
 ## Modes
 
 | | Local | Team |
 |---|---|---|
 | Who sees data | You | Everyone (scoped by role) |
-| Auth | None | Google OAuth (org domain) |
+| Auth | None | Google OAuth or password |
 | Collector setup | Auto (same machine) | API key per machine |
 | Deployment | `pnpm start` | Docker + env vars |
 
@@ -114,6 +129,7 @@ flowchart TB
 | Frontend | React + Vite + Tailwind CSS + Recharts + TanStack Query |
 | Design | oklch color tokens, Inter Tight + JetBrains Mono |
 | Deployment | Docker multi-stage build |
+| Testing | Vitest (unit) + Playwright (E2E) |
 
 ## Privacy
 
@@ -144,8 +160,17 @@ pnpm build
 cd packages/server && pnpm dev     # Hono on :8080
 cd packages/dashboard && pnpm dev  # Vite on :5173 (proxies /api to :8080)
 
-# Tests
+# Unit tests
 pnpm test
+
+# E2E tests (requires Docker)
+pnpm e2e:build   # build image once
+pnpm e2e:up      # start test environment on :8081
+pnpm e2e         # run 44 Playwright tests (~30s)
+pnpm e2e:down    # tear down + delete test DB
+
+# All-in-one E2E
+pnpm e2e:ci
 ```
 
 ## Roadmap
@@ -154,7 +179,6 @@ pnpm test
 - [ ] Email / Slack alerts for usage thresholds
 - [ ] Mobile-responsive layout
 - [ ] Usage budget limits per developer
-- [ ] Audit log for admin actions
 
 ## License
 
