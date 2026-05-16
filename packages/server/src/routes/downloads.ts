@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import { existsSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Readable } from 'node:stream';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -18,6 +19,13 @@ function getNssmPath(): string {
   return (
     process.env['NSSM_PATH'] ??
     resolve(__dirname, '../../../../collector/vendor/nssm.exe')
+  );
+}
+
+function getCollectorExePath(): string {
+  return (
+    process.env['COLLECTOR_EXE_PATH'] ??
+    resolve(__dirname, '../../../../collector/dist/collector.exe')
   );
 }
 
@@ -45,6 +53,25 @@ downloads.get('/download/nssm.exe', (c) => {
   c.header('Content-Disposition', 'attachment; filename="nssm.exe"');
   c.header('Cache-Control', 'no-store');
   return c.body(content);
+});
+
+/**
+ * GET /download/collector.exe — self-contained Windows collector built via
+ * Node SEA. ~60MB so streamed rather than buffered. 404 when the .exe hasn't
+ * been built/deployed yet so install.ps1 can fall back to collector.js.
+ */
+downloads.get('/download/collector.exe', (c) => {
+  const exePath = getCollectorExePath();
+  if (!existsSync(exePath)) {
+    return c.json({ error: 'collector.exe not built yet' }, 404);
+  }
+  const { size } = statSync(exePath);
+  c.header('Content-Type', 'application/octet-stream');
+  c.header('Content-Disposition', 'attachment; filename="collector.exe"');
+  c.header('Content-Length', String(size));
+  c.header('Cache-Control', 'no-store');
+  // Stream rather than readFileSync — keeps memory usage flat regardless of file size.
+  return c.body(Readable.toWeb(createReadStream(exePath)) as ReadableStream);
 });
 
 /** GET /install.sh — Mac/Linux install script */
@@ -142,36 +169,65 @@ Usage (save to file first, then run):
     exit 1
 }
 
-# Require Node.js >= 18
+# Prefer collector.exe (self-contained, no Node.js required).
+# Fall back to collector.js (requires Node.js >= 18) if the .exe isn't served.
+$ExeUrl  = "$ServerUrl/download/collector.exe"
+$ExePath = "$ChubDir\\collector.exe"
+$UseExe  = $false
+
 try {
-    $nodeVersion = node -e "process.stdout.write(process.versions.node)" 2>$null
-    $nodeMajor   = [int]($nodeVersion -split '\\.')[0]
-    if ($nodeMajor -lt 18) {
-        Write-Error "Node.js 18 or newer is required (found v$nodeVersion)."
-        exit 1
+    $head = Invoke-WebRequest -Uri $ExeUrl -Method Head -UseBasicParsing -ErrorAction Stop
+    if ($head.StatusCode -eq 200) {
+        Write-Host "Downloading collector.exe (self-contained, no Node.js required)..."
+        Invoke-WebRequest -Uri $ExeUrl -OutFile $ExePath -UseBasicParsing
+        $UseExe = $true
     }
 } catch {
-    Write-Error "Node.js is required but not found. Install Node.js 18+ from https://nodejs.org and try again."
-    exit 1
+    # 404 or network error — fall through to the Node.js path
 }
 
-$CollectorPath = "$ChubDir\\collector.js"
+if (-not $UseExe) {
+    # Require Node.js >= 18 for the JS fallback
+    try {
+        $nodeVersion = node -e "process.stdout.write(process.versions.node)" 2>$null
+        $nodeMajor   = [int]($nodeVersion -split '\\.')[0]
+        if ($nodeMajor -lt 18) {
+            Write-Error "Node.js 18 or newer is required (found v$nodeVersion)."
+            exit 1
+        }
+    } catch {
+        Write-Error "Node.js is required but not found. Install Node.js 18+ from https://nodejs.org and try again."
+        exit 1
+    }
 
-Write-Host "Downloading collector..."
-Invoke-WebRequest -Uri "$ServerUrl/download/collector.js" -OutFile $CollectorPath -UseBasicParsing
+    $CollectorPath = "$ChubDir\\collector.js"
+    Write-Host "collector.exe not available on this Hub. Falling back to collector.js (requires Node.js)..."
+    Invoke-WebRequest -Uri "$ServerUrl/download/collector.js" -OutFile $CollectorPath -UseBasicParsing
+}
+
+# Build the invocation command — direct .exe or 'node <path>' depending on what we downloaded.
+if ($UseExe) {
+    function Invoke-Collector { & $ExePath @args }
+} else {
+    function Invoke-Collector { & node $CollectorPath @args }
+}
 
 Write-Host "Initializing..."
-node $CollectorPath init --server $ServerUrl --api-key $ApiKey
+Invoke-Collector init --server $ServerUrl --api-key $ApiKey
 
 Write-Host "Installing Windows Service (via NSSM)..."
-node $CollectorPath install
+Invoke-Collector install
 
 Write-Host ""
 Write-Host "Done! The collector is now running as a Windows Service."
 Write-Host "It starts automatically on boot and restarts on crash."
 Write-Host ""
 Write-Host "Check service status:  sc query ClaudeUsageHubCollector"
-Write-Host "Check upload status:   node \`"$CollectorPath\`" status --check"
+if ($UseExe) {
+    Write-Host "Check upload status:   \`"$ExePath\`" status --check"
+} else {
+    Write-Host "Check upload status:   node \`"$CollectorPath\`" status --check"
+}
 Write-Host "View logs:             Get-Content \`"$LogDir\\collector.log\`" -Wait"
 `;
   c.header('Content-Type', 'text/plain; charset=utf-8');
