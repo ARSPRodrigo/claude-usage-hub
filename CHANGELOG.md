@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-05-16
+
+### Added — Multi-org & Workspaces
+- **Multi-organization support** — platform owners can create and manage multiple organizations, each with its own members and usage scope
+- **Workspaces** — organizations can be subdivided into workspaces; usage data is scoped to the active workspace
+- **Role hierarchy** — Platform Owner > Platform Admin > Developer, with org/workspace ownership grants
+- **Org Switcher** — top-bar dropdown to switch active org/workspace context without re-login
+- **Domain rules** — restrict sign-up to specific email domains per organization
+- **Audit log** — full history of role changes, invites, and admin actions
+- **Manage section** — dedicated admin pages for Organizations, Workspaces, Members, Domain Rules, and Audit Log
+
+### Added — Dashboard & Features
+- **Team Leaderboard** — all members can compare their token consumption; top 3 get gold/silver/bronze rank indicators; current user highlighted with a "YOU" badge
+- **Cost Comparison page** — compare personal spending across model tiers (Opus vs Sonnet vs Haiku) with break-even analysis
+- **Org-wide Cost Comparison** — admin view of cost comparison across the whole organization
+- **Signal UI redesign** — warm editorial aesthetic with oklch design tokens, Inter Tight + JetBrains Mono typography, and muted model colors
+- **Token chart x-axis fix** — range-aware time labels (hour:minute for 5H/24H, date+hour for 7D, date-only for 30D/ALL); no more repeated date labels
+
+### Changed
+- Dashboard is now fully theme-adaptive via CSS `oklch` variables — no hardcoded hex colors remain in component logic
+- Model badge styles use `color-mix(in oklch, …)` for automatic dark/light adaptation
+- Sidebar reorganized into My Usage / Organization / Manage sections
+
+### Fixed
+- Dashboard test suite updated to match oklch CSS variable design system (was asserting stale hex values)
+
+---
+
 ## [0.2.0-beta] - 2026-04-11
 
 ### Added — Team Mode

@@ -2,7 +2,7 @@
 
 A self-hosted, open-source tool for monitoring Claude Code token usage across your entire team. Track token consumption, cost breakdowns, and per-developer visibility — all from a central web dashboard.
 
-> **v0.3.0-beta** — New "Signal" UI redesign with oklch design tokens, warm editorial aesthetic, and muted model colors.
+> **v1.0.0** — Multi-org support, workspaces, team leaderboard, cost comparison, and the Signal UI redesign.
 
 ## Screenshots
 

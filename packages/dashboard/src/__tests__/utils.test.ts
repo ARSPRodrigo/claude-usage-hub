@@ -45,28 +45,25 @@ describe('modelShortName', () => {
 });
 
 describe('modelBadgeStyle', () => {
-  it('returns matching color for Opus in dark mode', () => {
-    const style = modelBadgeStyle('Opus', true);
-    expect(style.color).toBe('#22d3ee');
+  it('returns CSS variable color for Opus', () => {
+    const style = modelBadgeStyle('Opus');
+    expect(style.color).toBe('var(--m-opus)');
   });
-  it('returns deeper color for Opus in light mode', () => {
-    const style = modelBadgeStyle('Opus', false);
-    expect(style.color).toBe('#0891b2');
+  it('returns same color regardless of dark flag (CSS variables handle theming)', () => {
+    expect(modelBadgeStyle('Opus', true).color).toBe(modelBadgeStyle('Opus', false).color);
   });
-  it('returns matching color for Sonnet', () => {
-    const style = modelBadgeStyle('Sonnet', true);
-    expect(style.color).toBe('#a855f7');
+  it('returns CSS variable color for Sonnet', () => {
+    expect(modelBadgeStyle('Sonnet').color).toBe('var(--m-sonnet)');
   });
-  it('returns matching color for Haiku', () => {
-    const style = modelBadgeStyle('Haiku', true);
-    expect(style.color).toBe('#d946ef');
+  it('returns CSS variable color for Haiku', () => {
+    expect(modelBadgeStyle('Haiku').color).toBe('var(--m-haiku)');
   });
-  it('returns fallback for unknown', () => {
-    const style = modelBadgeStyle('Unknown', true);
-    expect(style.color).toBe('#94a3b8');
+  it('returns fallback for unknown model', () => {
+    expect(modelBadgeStyle('Unknown').color).toBe('var(--ink-3)');
   });
-  it('includes semi-transparent background', () => {
-    const style = modelBadgeStyle('Opus', true);
-    expect(style.backgroundColor).toContain('#22d3ee');
+  it('includes semi-transparent background via color-mix', () => {
+    const style = modelBadgeStyle('Opus');
+    expect(style.backgroundColor).toContain('var(--m-opus)');
+    expect(style.backgroundColor).toContain('color-mix');
   });
 });
