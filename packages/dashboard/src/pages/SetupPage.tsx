@@ -72,7 +72,9 @@ export function SetupPage() {
     mac: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${apiKey?.key ?? 'chub_...'} sh`,
     linux: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${apiKey?.key ?? 'chub_...'} sh`,
     'linux-vm': `# SSH into your VM, then run:\ncurl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${apiKey?.key ?? 'chub_...'} sh`,
-    windows: `$env:CHUB_API_KEY="${apiKey?.key ?? 'chub_...'}"; irm ${serverUrl}/install.ps1 | iex`,
+    // Download-to-file + ExecutionPolicy Bypass — works around corporate
+    // policy that blocks `irm | iex`. The script auto-elevates via UAC.
+    windows: `$env:CHUB_API_KEY='${apiKey?.key ?? 'chub_...'}'; iwr ${serverUrl}/install.ps1 -OutFile "$env:TEMP\\install-chub.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\install-chub.ps1"`,
   };
 
   return (
