@@ -21,6 +21,7 @@ import {
   getEntryCount,
   getLastEntryTimestamp,
   getAggregateTokensByTier,
+  getDeveloperStats,
 } from '../db/repository.js';
 import { computeComparisonCosts, isPlatformAdminRole } from '@claude-usage-hub/shared';
 import { listOrganizations, listWorkspaces } from '../db/org-repository.js';
@@ -205,6 +206,17 @@ api.get('/projects/:alias/detail', (c) => {
   const alias = c.req.param('alias');
   const range = parseRange(c);
   return c.json(getProjectDetail(alias, range, getDeveloperScope(c)));
+});
+
+// Leaderboard — visible to all authenticated members; scoped to their active org
+api.get('/dashboard/leaderboard', (c) => {
+  const range = parseRange(c);
+  const auth = c.get('auth') as AuthContext | undefined;
+  const scope = {
+    organizationId: auth?.activeOrgId ?? undefined,
+    workspaceId: auth?.activeWorkspaceId ?? undefined,
+  };
+  return c.json(getDeveloperStats(range, scope));
 });
 
 // ── Organizations & workspaces (Phase 2) ─────────────────────────────────

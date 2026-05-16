@@ -16,11 +16,12 @@ import { DeveloperDetailPage } from '@/pages/DeveloperDetailPage';
 import { HelpPage } from '@/pages/HelpPage';
 import { CostComparisonPage } from '@/pages/CostComparisonPage';
 import { ManagePage } from '@/pages/ManagePage';
+import { LeaderboardPage } from '@/pages/LeaderboardPage';
 import { apiGet, getToken, getUser, setUser } from '@/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 
 export type InnerPage =
-  | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile'
+  | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'leaderboard' | 'profile'
   | 'admin-org' | 'admin-team' | 'admin-cost-comparison'
   | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit' | 'manage-domain-rules'
   | 'settings' | 'developer-detail' | 'help';
@@ -34,6 +35,7 @@ const PAGE_LABELS: Record<InnerPage, string> = {
   'admin-team': 'TEAM',
   settings: 'SETTINGS',
   'cost-comparison': 'COST COMPARISON',
+  leaderboard: 'LEADERBOARD',
   'admin-cost-comparison': 'COST COMPARISON',
   'manage-organizations': 'ORGANIZATIONS',
   'manage-workspaces': 'WORKSPACES',
@@ -55,6 +57,7 @@ function pathnameToPage(pathname: string): InnerPage | null {
   if (pathname === '/sessions') return 'sessions';
   if (pathname === '/projects') return 'projects';
   if (pathname === '/cost-comparison') return 'cost-comparison';
+  if (pathname === '/leaderboard') return 'leaderboard';
   if (pathname === '/admin/cost-comparison') return 'admin-cost-comparison';
   if (pathname === '/manage/organizations') return 'manage-organizations';
   if (pathname === '/manage/workspaces') return 'manage-workspaces';
@@ -162,6 +165,7 @@ export default function App() {
     sessions: '/sessions',
     projects: '/projects',
     'cost-comparison': '/cost-comparison',
+    leaderboard: '/leaderboard',
     'admin-cost-comparison': '/admin/cost-comparison',
     'manage-organizations': '/manage/organizations',
     'manage-workspaces': '/manage/workspaces',
@@ -239,6 +243,7 @@ export default function App() {
           {currentPage === 'sessions' && <SessionsPage />}
           {currentPage === 'projects' && <ProjectsPage />}
           {currentPage === 'cost-comparison' && <CostComparisonPage />}
+          {currentPage === 'leaderboard' && <LeaderboardPage />}
           {currentPage === 'admin-cost-comparison' && <CostComparisonPage orgWide />}
           {currentPage === 'manage-organizations' && <ManagePage section="orgs" />}
           {currentPage === 'manage-workspaces' && <ManagePage section="workspaces" />}

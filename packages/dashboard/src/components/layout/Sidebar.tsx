@@ -1,7 +1,7 @@
 import {
   BarChart3, FolderOpen, Clock, Scale, Building2, Users, Layers, FileClock,
   ChevronUp, User, Settings, LogOut,
-  Gauge, HelpCircle, AtSign,
+  Gauge, HelpCircle, AtSign, Trophy,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -9,7 +9,7 @@ import { useHealth } from '@/api/hooks';
 import { getUser, clearAuth, isPlatformAdmin, canManage } from '@/api/client';
 
 type Page =
-  | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'profile'
+  | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'leaderboard' | 'profile'
   | 'admin-org' | 'admin-team' | 'admin-cost-comparison'
   | 'manage-organizations' | 'manage-workspaces' | 'manage-members' | 'manage-audit' | 'manage-domain-rules'
   | 'settings' | 'developer-detail' | 'help';
@@ -105,6 +105,7 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
           <NavItem id="projects" label="Projects" icon={FolderOpen} />
           <NavItem id="sessions" label="Sessions" icon={Clock} />
           <NavItem id="cost-comparison" label="Cost Comparison" icon={Scale} />
+          <NavItem id="leaderboard" label="Leaderboard" icon={Trophy} />
         </ul>
 
         {showManageSection && (
