@@ -14,17 +14,16 @@ export const DAEMON_LABEL = 'com.claude-usage-hub.collector';
 export const WINDOWS_SERVICE_NAME = 'ClaudeUsageHubCollector';
 
 /**
- * SHA-256 of the bundled nssm.exe (NSSM 2.24, win64).
+ * SHA-256 of the bundled nssm.exe (NSSM 2.24-101-g897c7ad, win64).
  * Must match packages/collector/vendor/nssm-sha256.txt.
  *
- * To update: download nssm-2.24.zip from https://nssm.cc/download,
- * extract win64/nssm.exe to packages/collector/vendor/nssm.exe, then run:
+ * To update: replace packages/collector/vendor/nssm.exe, then run:
  *   shasum -a 256 packages/collector/vendor/nssm.exe
  * and paste the result here and in vendor/nssm-sha256.txt.
  *
  * Empty string disables verification (development only — not for production).
  */
-const NSSM_SHA256 = '';
+const NSSM_SHA256 = 'eee9c44c29c2be011f1f1e43bb8c3fca888cb81053022ec5a0060035de16d848';
 
 /**
  * Detect the current OS platform.
