@@ -1,0 +1,29 @@
+services:
+  server:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: claude-usage-hub:latest
+    pull_policy: never
+    ports:
+      - "8081:8080"
+    environment:
+      MODE: team
+      PORT: "8080"
+      JWT_SECRET: e2e-test-jwt-secret-not-for-production
+      ADMIN_EMAIL: admin@test.local
+      ADMIN_PASSWORD: test1234
+      GOOGLE_CLIENT_ID: ""          # empty → password login form shown
+      ALLOWED_DOMAIN: test.local
+      DB_PATH: /data/usage.db
+      RETENTION_DAYS: "90"
+    volumes:
+      - e2e_data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/api/v1/health', r => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  e2e_data:

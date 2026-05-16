@@ -208,14 +208,17 @@ api.get('/projects/:alias/detail', (c) => {
   return c.json(getProjectDetail(alias, range, getDeveloperScope(c)));
 });
 
-// Leaderboard — visible to all authenticated members; scoped to their active org
+// Leaderboard — visible to all authenticated members.
+// Platform admins see everyone; regular developers are scoped to their active workspace.
 api.get('/dashboard/leaderboard', (c) => {
   const range = parseRange(c);
   const auth = c.get('auth') as AuthContext | undefined;
-  const scope = {
-    organizationId: auth?.activeOrgId ?? undefined,
-    workspaceId: auth?.activeWorkspaceId ?? undefined,
-  };
+  const scope = (!auth || isPlatformAdminRole(auth.role))
+    ? {}
+    : {
+        organizationId: auth.activeOrgId ?? undefined,
+        workspaceId: auth.activeWorkspaceId ?? undefined,
+      };
   return c.json(getDeveloperStats(range, scope));
 });
 

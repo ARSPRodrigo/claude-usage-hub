@@ -1,0 +1,4 @@
+fixtures/auth-state.json
+playwright-report/
+test-results/
+node_modules/
