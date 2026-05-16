@@ -21,6 +21,7 @@
   "scripts": {
     "build": "tsc",
     "build:bundle": "node bundle.cjs",
+    "build:sea": "pwsh -File build-sea.ps1",
     "dev": "tsx src/cli.ts",
     "clean": "rm -rf dist",
     "test": "vitest run",
