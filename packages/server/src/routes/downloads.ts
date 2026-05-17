@@ -136,7 +136,7 @@ $ErrorActionPreference = 'Stop'
 
 # --- Elevation check -----------------------------------------------------------
 # Installing a Windows Service requires Administrator rights. We refuse rather
-# than auto-elevate — the auto-elevation path was a corporate-policy and UAC
+# than auto-elevate - the auto-elevation path was a corporate-policy and UAC
 # nightmare that produced spawn loops on some configurations. Just tell the
 # user clearly what to do.
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -151,7 +151,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     Write-Host "  3. Re-paste the same install command from your Hub dashboard"
     Write-Host ""
     Write-Host "(You only need to do this once. The collector then runs as a"
-    Write-Host " Windows Service in the background — no further admin needed.)"
+    Write-Host " Windows Service in the background - no further admin needed.)"
     Write-Host ""
     exit 1
 }
@@ -192,7 +192,7 @@ try {
         $UseExe = $true
     }
 } catch {
-    # 404 or network error — fall through to the Node.js path
+    # 404 or network error - fall through to the Node.js path
 }
 
 if (-not $UseExe) {
@@ -214,7 +214,7 @@ if (-not $UseExe) {
     Invoke-WebRequest -Uri "$ServerUrl/download/collector.js" -OutFile $CollectorPath -UseBasicParsing
 }
 
-# Build the invocation command — direct .exe or 'node <path>' depending on what we downloaded.
+# Build the invocation command - direct .exe or 'node <path>' depending on what we downloaded.
 if ($UseExe) {
     function Invoke-Collector { & $ExePath @args }
 } else {
@@ -239,8 +239,11 @@ if ($UseExe) {
 }
 Write-Host "View logs:             Get-Content \`"$LogDir\\collector.log\`" -Wait"
 `;
+  // Prepend UTF-8 BOM so Windows PowerShell 5.1 reads the file as UTF-8
+  // rather than the system default code page (usually CP1252). Without
+  // this, any non-ASCII byte in the script breaks the parser.
   c.header('Content-Type', 'text/plain; charset=utf-8');
-  return c.body(script);
+  return c.body('﻿' + script);
 });
 
 export { downloads as downloadRoutes };
