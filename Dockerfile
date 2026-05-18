@@ -92,6 +92,12 @@ COPY --from=collector-build /build/packages/collector/dist/collector.bundle.cjs 
 # NSSM binary — served at /download/nssm.exe for the Windows installer.
 COPY --from=collector-build /build/packages/collector/vendor/nssm.exe packages/collector/vendor/nssm.exe
 
+# Optional self-contained collector.exe — served at /download/collector.exe.
+# Produced by the build-collector-exe GitHub Actions workflow on a Windows
+# runner; placed in packages/collector/dist/ on the host before docker build.
+# If absent, the install.ps1 falls back to collector.js + Node.js.
+COPY packages/collector/dist/collector.exe packages/collector/dist/collector.exe
+
 # Data directory for SQLite + logs
 RUN mkdir -p /data && chown node:node /data
 
@@ -104,6 +110,7 @@ ENV NODE_ENV=production \
     DB_PATH=/data/usage.db \
     DASHBOARD_DIST_PATH=/app/packages/dashboard/dist \
     COLLECTOR_BUNDLE_PATH=/app/packages/collector/dist/collector.bundle.cjs \
+    COLLECTOR_EXE_PATH=/app/packages/collector/dist/collector.exe \
     NSSM_PATH=/app/packages/collector/vendor/nssm.exe
 
 CMD ["node", "packages/server/dist/server.js"]
