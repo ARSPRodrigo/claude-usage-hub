@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+
 import { homedir, platform } from 'node:os';
 import { execSync } from 'node:child_process';
 import { expandHome, loadConfig, saveConfig } from './config.js';
@@ -207,15 +208,119 @@ export function uninstallLinux(): InstallResult {
 }
 
 // ---------------------------------------------------------------------------
-// Windows — NSSM Windows Service
+// Windows — two-path installer
 //
-// Replaces the previous Task Scheduler approach which was unreliable:
-//   - LogonTrigger is session-scoped and doesn't recover after silent crashes
-//   - Task doesn't resume on machine reboot without a fresh user logon
+// Admin present  → NSSM Windows Service (boot-start, full reliability)
+// No admin       → Hidden Scheduled Task in user context (logon-start,
+//                  no console window, RestartOnFailure configured)
 //
-// NSSM registers a proper Windows Service (SCM-managed): starts on boot,
-// restarts automatically on crash, survives lock/remote-desktop sessions.
+// Non-admin path reinstates a user-context Scheduled Task but fixes the
+// original failure: the window is hidden via a PowerShell -WindowStyle
+// Hidden wrapper, so users can never accidentally close it.
 // ---------------------------------------------------------------------------
+
+// ── Non-admin path: user-context hidden Scheduled Task ───────────────────
+
+/**
+ * Build Task Scheduler XML for the non-admin (user-context) install.
+ *
+ * Key fixes versus the original schtasks implementation:
+ *   - console window is hidden via PowerShell -WindowStyle Hidden wrapper
+ *   - StartWhenAvailable=true so a missed trigger fires on next boot/logon
+ *   - RestartOnFailure with 999 retries at 60s intervals
+ *
+ * Pure function — no side effects — so it's unit-testable.
+ */
+export function buildScheduledTaskXml(
+  nodePath: string,
+  cliPath: string,
+  logDir: string,
+): string {
+  const username = process.env['USERNAME'] ?? process.env['USER'] ?? basename(homedir());
+  // Wrap in PowerShell -WindowStyle Hidden so the console window is invisible.
+  // For SEA binaries cliPath is '', so we pass only 'run' to the exe.
+  const collectorArgs = cliPath
+    ? `& '${nodePath}' '${cliPath}' run`
+    : `& '${nodePath}' run`;
+  const psArgs = `-NonInteractive -WindowStyle Hidden -Command "${collectorArgs}"`;
+
+  return `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Claude Usage Hub Collector</Description>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>.\\${username}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>.\\${username}</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>999</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>powershell.exe</Command>
+      <Arguments>${psArgs}</Arguments>
+      <WorkingDirectory>${homedir()}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+`;
+}
+
+export function installWindowsScheduledTask(
+  nodePath: string,
+  cliPath: string,
+  logDir: string,
+): InstallResult {
+  mkdirSync(logDir, { recursive: true });
+
+  const xmlPath = join(logDir, 'task.xml');
+  // UTF-16 LE with BOM — required by schtasks XML importer.
+  writeFileSync(xmlPath, '﻿' + buildScheduledTaskXml(nodePath, cliPath, logDir), 'utf16le');
+
+  try {
+    // Best-effort remove existing task before re-creating (idempotent).
+    try { execSync(`schtasks /delete /tn "${DAEMON_LABEL}" /f`, { stdio: 'ignore' }); } catch { /* ok */ }
+    execSync(`schtasks /create /xml "${xmlPath}" /tn "${DAEMON_LABEL}" /f`, { stdio: 'pipe' });
+    try { execSync(`schtasks /run /tn "${DAEMON_LABEL}"`, { stdio: 'pipe' }); } catch { /* ignore if immediate start fails */ }
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `schtasks failed: ${err instanceof Error ? err.message : err}`,
+    };
+  } finally {
+    try { unlinkSync(xmlPath); } catch { /* ok */ }
+  }
+}
+
+export function uninstallWindowsScheduledTask(): InstallResult {
+  try {
+    execSync(`schtasks /delete /tn "${DAEMON_LABEL}" /f`, { stdio: 'pipe' });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `schtasks remove failed: ${err instanceof Error ? err.message : err}` };
+  }
+}
+
+// ── Admin path: NSSM Windows Service ─────────────────────────────────────
 
 /** Stable path where nssm.exe is stored after first download. */
 export function nssmExePath(): string {
@@ -359,20 +464,19 @@ export async function installWindows(
   cliPath: string,
   logDir: string,
 ): Promise<InstallResult> {
-  // Must run as Administrator to register a Windows Service.
-  if (!isElevatedWindows()) {
-    return {
-      ok: false,
-      error:
-        'Administrator privileges are required to install the Windows Service.\n' +
-        'Right-click PowerShell → "Run as Administrator", then re-run:\n' +
-        `  node collector.bundle.cjs install`,
-    };
-  }
-
-  // Migrate old Task Scheduler entry and expand tilde in stored config.
+  // Migrate old (legacy) schtasks entry and tilde paths regardless of path.
   migrateFromSchtasks();
   migrateConfigTildePath();
+
+  // ── Non-admin: user-context hidden Scheduled Task ──────────────────────
+  // No admin required. Starts on user logon, hidden window, auto-restarts.
+  if (!isElevatedWindows()) {
+    console.log('No Administrator privileges detected — installing as a hidden Scheduled Task (starts on logon).');
+    return installWindowsScheduledTask(nodePath, cliPath, logDir);
+  }
+
+  // ── Admin: full NSSM Windows Service ───────────────────────────────────
+  // Starts on boot (before login), survives lock/remote-desktop sessions.
   mkdirSync(logDir, { recursive: true });
 
   // Ensure nssm.exe is present (download from Hub if needed).
@@ -419,26 +523,44 @@ export async function installWindows(
 }
 
 export function uninstallWindows(): InstallResult {
-  const nssmPath = nssmExePath();
+  // Remove whichever backend is installed (or both, for safety).
+  let serviceError: string | null = null;
+  let taskError: string | null = null;
 
+  // NSSM service removal
+  const nssmPath = nssmExePath();
   try {
     if (existsSync(nssmPath)) {
       try { execSync(`"${nssmPath}" stop "${WINDOWS_SERVICE_NAME}"`, { stdio: 'ignore' }); } catch { /* ok */ }
       execSync(`"${nssmPath}" remove "${WINDOWS_SERVICE_NAME}" confirm`, { stdio: 'pipe' });
     } else {
-      // nssm.exe was deleted but the service may still be registered — sc.exe fallback.
       try { execSync(`sc stop "${WINDOWS_SERVICE_NAME}"`, { stdio: 'ignore' }); } catch { /* ok */ }
       execSync(`sc delete "${WINDOWS_SERVICE_NAME}"`, { stdio: 'pipe' });
     }
-    // Clean up any leftover schtasks entry from previous versions.
-    try { execSync(`schtasks /delete /tn "${DAEMON_LABEL}" /f`, { stdio: 'ignore' }); } catch { /* ok */ }
-    return { ok: true };
   } catch (err) {
+    // Service may not have been installed — that's fine.
+    serviceError = err instanceof Error ? err.message : String(err);
+  }
+
+  // Scheduled Task removal (non-admin path or legacy).
+  try {
+    execSync(`schtasks /query /tn "${DAEMON_LABEL}"`, { stdio: 'pipe' });
+    // If query succeeded, task exists — remove it.
+    execSync(`schtasks /delete /tn "${DAEMON_LABEL}" /f`, { stdio: 'ignore' });
+  } catch {
+    // Task not present — nothing to remove.
+    taskError = 'task not found (ok)';
+  }
+
+  // Only fail if BOTH removals failed and at least one was expected.
+  const neitherInstalled = serviceError && taskError;
+  if (neitherInstalled) {
     return {
       ok: false,
-      error: `Service removal failed: ${err instanceof Error ? err.message : err}`,
+      error: 'Neither a Windows Service nor a Scheduled Task was found for the collector.',
     };
   }
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -481,13 +603,10 @@ export function isDaemonInstalled(): boolean {
     case 'macos': return existsSync(launchdPlistPath());
     case 'linux': return existsSync(systemdServicePath());
     case 'windows': {
-      // Use sc.exe (always available) rather than nssm.exe which may have been removed.
-      try {
-        execSync(`sc query "${WINDOWS_SERVICE_NAME}"`, { stdio: 'pipe' });
-        return true;
-      } catch {
-        return false;
-      }
+      // Check NSSM service first (admin install).
+      try { execSync(`sc query "${WINDOWS_SERVICE_NAME}"`, { stdio: 'pipe' }); return true; } catch { /* not service */ }
+      // Fall back to checking the Scheduled Task (non-admin install).
+      try { execSync(`schtasks /query /tn "${DAEMON_LABEL}"`, { stdio: 'pipe' }); return true; } catch { return false; }
     }
     default: return false;
   }

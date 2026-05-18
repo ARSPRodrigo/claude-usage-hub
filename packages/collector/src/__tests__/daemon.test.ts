@@ -4,6 +4,7 @@ import {
   buildLaunchdPlist,
   buildSystemdService,
   buildNssmCommands,
+  buildScheduledTaskXml,
   DAEMON_LABEL,
   WINDOWS_SERVICE_NAME,
   launchdPlistPath,
@@ -111,6 +112,55 @@ describe('daemon', () => {
       const last = cmds[cmds.length - 1];
       expect(last?.cmd).toBe('start');
       expect(last?.args).toContain(WINDOWS_SERVICE_NAME);
+    });
+  });
+
+  describe('buildScheduledTaskXml (non-admin fallback)', () => {
+    const xml = buildScheduledTaskXml(NODE, CLI, LOG_DIR);
+
+    it('is valid XML with Task root element', () => {
+      expect(xml).toContain('<?xml version="1.0"');
+      expect(xml).toContain('<Task ');
+      expect(xml).toContain('</Task>');
+    });
+
+    it('uses powershell.exe with -WindowStyle Hidden to suppress console', () => {
+      expect(xml).toContain('<Command>powershell.exe</Command>');
+      expect(xml).toContain('-WindowStyle Hidden');
+    });
+
+    it('includes the node path and cli path in the powershell command', () => {
+      expect(xml).toContain(NODE);
+      expect(xml).toContain(CLI);
+    });
+
+    it('includes LogonTrigger so the task starts on user logon', () => {
+      expect(xml).toContain('<LogonTrigger>');
+      expect(xml).toContain('<Enabled>true</Enabled>');
+    });
+
+    it('has RestartOnFailure configured', () => {
+      expect(xml).toContain('<RestartOnFailure>');
+      expect(xml).toContain('<Interval>PT1M</Interval>');
+      expect(xml).toContain('<Count>999</Count>');
+    });
+
+    it('runs at LeastPrivilege (no elevation required)', () => {
+      expect(xml).toContain('<RunLevel>LeastPrivilege</RunLevel>');
+    });
+
+    it('starts when available (no missed-trigger window)', () => {
+      expect(xml).toContain('<StartWhenAvailable>true</StartWhenAvailable>');
+    });
+
+    it('does not stop when on battery', () => {
+      expect(xml).toContain('<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>');
+    });
+
+    it('for SEA binary (empty cliPath) uses exe run directly', () => {
+      const seaXml = buildScheduledTaskXml(NODE, '', LOG_DIR);
+      expect(seaXml).toContain(NODE);
+      expect(seaXml).not.toContain(CLI);
     });
   });
 
