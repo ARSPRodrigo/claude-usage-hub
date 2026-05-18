@@ -8,3 +8,10 @@ node_modules
 .env
 .env.*
 !.env.example
+
+# Allow pre-built collector.exe to enter the build context.
+# Produced by build-collector-exe GHA workflow on Windows; the Linux Docker
+# build can't produce it itself. Drop it at packages/collector/dist/ on the
+# host before `docker compose build`.
+!packages/collector/dist
+!packages/collector/dist/collector.exe
