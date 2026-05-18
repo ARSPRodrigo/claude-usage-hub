@@ -22,7 +22,7 @@ export const DEFAULTS = {
 } as const;
 
 /** Current collector version. */
-export const COLLECTOR_VERSION = '0.1.0';
+export const COLLECTOR_VERSION = '0.4.0-beta';
 
 /** Session duration in hours (Claude's billing window). */
 export const SESSION_DURATION_HOURS = 5;
