@@ -33,6 +33,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared package
+        # collector's bundle.cjs imports from @claude-usage-hub/shared, which is a
+        # TypeScript workspace package. esbuild can't resolve it until shared's
+        # dist/index.js has been emitted by tsc.
+        run: pnpm --filter @claude-usage-hub/shared build
+
       - name: Build collector.exe
         working-directory: packages/collector
         run: pwsh -File build-sea.ps1
