@@ -72,11 +72,10 @@ export function SetupPage() {
     mac: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${apiKey?.key ?? 'chub_...'} sh`,
     linux: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${apiKey?.key ?? 'chub_...'} sh`,
     'linux-vm': `# SSH into your VM, then run:\ncurl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${apiKey?.key ?? 'chub_...'} sh`,
-    // Windows install needs Administrator privileges to register the Windows
-    // Service. We require the user to open a PowerShell (Admin) shell rather
-    // than auto-elevating, because UAC re-launch produced spawn loops on some
-    // corporate Windows configurations.
-    windows: `# Open PowerShell as Administrator (Win+X → 'Windows PowerShell (Admin)'), then paste:
+    // Smart installer: works in regular OR admin PowerShell.
+    //   Admin → registers a Windows Service (boot-start)
+    //   Standard user → registers a hidden Scheduled Task (logon-start, no console window)
+    windows: `# Paste into PowerShell (admin not required — auto-detects):
 $env:CHUB_API_KEY='${apiKey?.key ?? 'chub_...'}'; iwr ${serverUrl}/install.ps1 -OutFile "$env:TEMP\\install-chub.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\install-chub.ps1"`,
   };
 

@@ -122,9 +122,10 @@ export function ProfilePage() {
     mac: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${newKey?.key ?? 'chub_...'} sh`,
     linux: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${newKey?.key ?? 'chub_...'} sh`,
     'linux-vm': `# SSH into your VM, then:\ncurl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${newKey?.key ?? 'chub_...'} sh`,
-    // Windows install needs Administrator privileges. User must open
-    // PowerShell as Admin first — see install.ps1 for the explanation.
-    windows: `# Open PowerShell as Administrator (Win+X → 'Windows PowerShell (Admin)'), then paste:
+    // Smart installer: works in regular OR admin PowerShell.
+    //   Admin → registers a Windows Service (boot-start)
+    //   Standard user → registers a hidden Scheduled Task (logon-start, no console window)
+    windows: `# Paste into PowerShell (admin not required — auto-detects):
 $env:CHUB_API_KEY='${newKey?.key ?? 'chub_...'}'; iwr ${serverUrl}/install.ps1 -OutFile "$env:TEMP\\install-chub.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\install-chub.ps1"`,
   };
 

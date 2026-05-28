@@ -134,26 +134,17 @@ param([string]$ApiKey = $env:CHUB_API_KEY)
 
 $ErrorActionPreference = 'Stop'
 
-# --- Elevation check -----------------------------------------------------------
-# Installing a Windows Service requires Administrator rights. We refuse rather
-# than auto-elevate - the auto-elevation path was a corporate-policy and UAC
-# nightmare that produced spawn loops on some configurations. Just tell the
-# user clearly what to do.
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host ""
-    Write-Host "==========================================================" -ForegroundColor Yellow
-    Write-Host " This installer needs Administrator privileges" -ForegroundColor Yellow
-    Write-Host "==========================================================" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Please close this window, then:"
-    Write-Host "  1. Press Win + X"
-    Write-Host "  2. Click 'Windows PowerShell (Admin)' or 'Terminal (Admin)'"
-    Write-Host "  3. Re-paste the same install command from your Hub dashboard"
-    Write-Host ""
-    Write-Host "(You only need to do this once. The collector then runs as a"
-    Write-Host " Windows Service in the background - no further admin needed.)"
-    Write-Host ""
-    exit 1
+# Smart installer:
+#   - If running as Administrator: registers a Windows Service via NSSM
+#     (boot-start, full reliability).
+#   - If running as a standard user: registers a hidden Scheduled Task
+#     in user context (logon-start, no console window, auto-restarts).
+# Both paths work; no elevation prompt needed.
+$IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($IsAdmin) {
+    Write-Host "Administrator detected - will install as a Windows Service." -ForegroundColor Cyan
+} else {
+    Write-Host "Standard user detected - will install as a hidden Scheduled Task (runs on logon)." -ForegroundColor Cyan
 }
 
 $ServerUrl    = "${origin}"
