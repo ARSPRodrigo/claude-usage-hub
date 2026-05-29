@@ -215,14 +215,39 @@ if ($UseExe) {
 Write-Host "Initializing..."
 Invoke-Collector init --server $ServerUrl --api-key $ApiKey
 
-Write-Host "Installing Windows Service (via NSSM)..."
+if ($IsAdmin) {
+    Write-Host "Installing Windows Service (via NSSM)..."
+} else {
+    Write-Host "Installing Scheduled Task (user context, no admin needed)..."
+}
+
+# Run install and capture exit code — \$LASTEXITCODE reflects the native binary's status.
 Invoke-Collector install
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "Installation failed (exit code $LASTEXITCODE)." -ForegroundColor Red
+    Write-Host "See the error above. The collector binary and config were saved, but the"
+    Write-Host "service/task was not registered. Fix the error and re-run:"
+    if ($UseExe) {
+        Write-Host "  \`"$ExePath\`" install"
+    } else {
+        Write-Host "  node \`"$CollectorPath\`" install"
+    }
+    exit 1
+}
 
 Write-Host ""
-Write-Host "Done! The collector is now running as a Windows Service."
-Write-Host "It starts automatically on boot and restarts on crash."
-Write-Host ""
-Write-Host "Check service status:  sc query ClaudeUsageHubCollector"
+if ($IsAdmin) {
+    Write-Host "Done! The collector is now running as a Windows Service." -ForegroundColor Green
+    Write-Host "It starts automatically on boot and restarts on crash."
+    Write-Host ""
+    Write-Host "Check service status:  sc query ClaudeUsageHubCollector"
+} else {
+    Write-Host "Done! The collector is now running as a hidden Scheduled Task." -ForegroundColor Green
+    Write-Host "It starts automatically on logon and restarts on crash."
+    Write-Host ""
+    Write-Host "Check task status:     schtasks /query /tn com.claude-usage-hub.collector"
+}
 if ($UseExe) {
     Write-Host "Check upload status:   \`"$ExePath\`" status --check"
 } else {
