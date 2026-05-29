@@ -116,7 +116,8 @@ describe('daemon', () => {
   });
 
   describe('buildScheduledTaskXml (non-admin fallback)', () => {
-    const xml = buildScheduledTaskXml(NODE, CLI, LOG_DIR);
+    const FAKE_SID = 'S-1-5-21-1234567890-2345678901-3456789012-1001';
+    const xml = buildScheduledTaskXml(NODE, CLI, LOG_DIR, FAKE_SID);
 
     it('is valid XML with Task root element', () => {
       expect(xml).toContain('<?xml version="1.0"');
@@ -158,9 +159,19 @@ describe('daemon', () => {
     });
 
     it('for SEA binary (empty cliPath) uses exe run directly', () => {
-      const seaXml = buildScheduledTaskXml(NODE, '', LOG_DIR);
+      const seaXml = buildScheduledTaskXml(NODE, '', LOG_DIR, FAKE_SID);
       expect(seaXml).toContain(NODE);
       expect(seaXml).not.toContain(CLI);
+    });
+
+    it('embeds the caller SID in both Principal and LogonTrigger', () => {
+      // Domain-joined corporate machines reject bare account names with
+      // "No mapping between account names and security IDs". SID is the
+      // canonical, unambiguous identifier.
+      expect(xml).toContain(`<UserId>${FAKE_SID}</UserId>`);
+      // Should appear in BOTH Principal and LogonTrigger.
+      const matches = xml.match(new RegExp(`<UserId>${FAKE_SID}</UserId>`, 'g'));
+      expect(matches?.length).toBe(2);
     });
   });
 

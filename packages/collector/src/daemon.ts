@@ -222,12 +222,36 @@ export function uninstallLinux(): InstallResult {
 // ── Non-admin path: user-context hidden Scheduled Task ───────────────────
 
 /**
+ * Resolve the current user's SID via `whoami /user /fo csv`.
+ *
+ * Using a SID (instead of `DOMAIN\user` or `.\user`) avoids the common
+ * "No mapping between account names and security IDs was done" error on
+ * domain-joined corporate machines: domain accounts can't be resolved as
+ * `.\user` (which means local), and the bare `USERNAME` env var is
+ * ambiguous between local and domain.
+ *
+ * Returns null if anything goes wrong; caller should fall back to a
+ * bare username.
+ */
+export function getCurrentUserSid(): string | null {
+  try {
+    // /fo csv /nh → "FullUser","SID"  (no header)
+    const out = execSync('whoami /user /fo csv /nh', { encoding: 'utf-8' });
+    const m = out.match(/"([^"]+)","(S-[\d-]+)"/);
+    return m?.[2] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Build Task Scheduler XML for the non-admin (user-context) install.
  *
  * Key fixes versus the original schtasks implementation:
  *   - console window is hidden via PowerShell -WindowStyle Hidden wrapper
  *   - StartWhenAvailable=true so a missed trigger fires on next boot/logon
  *   - RestartOnFailure with 999 retries at 60s intervals
+ *   - UserId is the caller's SID (works on domain-joined machines)
  *
  * Pure function — no side effects — so it's unit-testable.
  */
@@ -235,8 +259,8 @@ export function buildScheduledTaskXml(
   nodePath: string,
   cliPath: string,
   logDir: string,
+  userIdentifier: string,
 ): string {
-  const username = process.env['USERNAME'] ?? process.env['USER'] ?? basename(homedir());
   // Wrap in PowerShell -WindowStyle Hidden so the console window is invisible.
   // For SEA binaries cliPath is '', so we pass only 'run' to the exe.
   const collectorArgs = cliPath
@@ -251,7 +275,7 @@ export function buildScheduledTaskXml(
   </RegistrationInfo>
   <Principals>
     <Principal id="Author">
-      <UserId>.\\${username}</UserId>
+      <UserId>${userIdentifier}</UserId>
       <LogonType>InteractiveToken</LogonType>
       <RunLevel>LeastPrivilege</RunLevel>
     </Principal>
@@ -259,7 +283,7 @@ export function buildScheduledTaskXml(
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
-      <UserId>.\\${username}</UserId>
+      <UserId>${userIdentifier}</UserId>
     </LogonTrigger>
   </Triggers>
   <Settings>
@@ -291,9 +315,22 @@ export function installWindowsScheduledTask(
 ): InstallResult {
   mkdirSync(logDir, { recursive: true });
 
+  // Resolve current user identity. Prefer SID (unambiguous, works on
+  // domain-joined machines); fall back to whoami's DOMAIN\user output;
+  // last resort: bare USERNAME (works on standalone machines).
+  let userIdentifier: string | null = getCurrentUserSid();
+  if (!userIdentifier) {
+    try {
+      userIdentifier = execSync('whoami', { encoding: 'utf-8' }).trim();
+    } catch { /* ignore */ }
+  }
+  if (!userIdentifier) {
+    userIdentifier = process.env['USERNAME'] ?? process.env['USER'] ?? basename(homedir());
+  }
+
   const xmlPath = join(logDir, 'task.xml');
   // UTF-16 LE with BOM — required by schtasks XML importer.
-  writeFileSync(xmlPath, '﻿' + buildScheduledTaskXml(nodePath, cliPath, logDir), 'utf16le');
+  writeFileSync(xmlPath, '﻿' + buildScheduledTaskXml(nodePath, cliPath, logDir, userIdentifier), 'utf16le');
 
   try {
     // Best-effort remove existing task before re-creating (idempotent).
