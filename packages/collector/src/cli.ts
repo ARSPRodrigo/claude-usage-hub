@@ -176,7 +176,8 @@ program
 program
   .command('install')
   .description('Install the collector as a background daemon (launchd / systemd / Task Scheduler)')
-  .action(async () => {
+  .option('-v, --verbose', 'Print extra diagnostic info during install', false)
+  .action(async (opts: { verbose?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Not configured. Run "claude-hub-collector init" first.');
@@ -190,7 +191,7 @@ program
     }
 
     console.log(`Installing daemon for platform: ${detectPlatform()}`);
-    const result = await install();
+    const result = await install({ verbose: opts.verbose === true });
 
     if (result.ok) {
       console.log('Daemon installed and started successfully.');

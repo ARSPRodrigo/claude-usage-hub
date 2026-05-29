@@ -255,6 +255,16 @@ export function getCurrentUserSid(): string | null {
  *
  * Pure function — no side effects — so it's unit-testable.
  */
+/** Escape XML special characters in element-content text. */
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')   // must be FIRST — substituting & adds more &s
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 export function buildScheduledTaskXml(
   nodePath: string,
   cliPath: string,
@@ -263,10 +273,18 @@ export function buildScheduledTaskXml(
 ): string {
   // Wrap in PowerShell -WindowStyle Hidden so the console window is invisible.
   // For SEA binaries cliPath is '', so we pass only 'run' to the exe.
+  // The `&` is PowerShell's call operator — needed to execute a path as a command.
   const collectorArgs = cliPath
     ? `& '${nodePath}' '${cliPath}' run`
     : `& '${nodePath}' run`;
   const psArgs = `-NonInteractive -WindowStyle Hidden -Command "${collectorArgs}"`;
+
+  // EVERY value substituted into element content needs XML escaping —
+  // `&` in PowerShell's call operator is the most common trip-up but paths
+  // with `<` or `>` would also break the XML parser otherwise.
+  const escapedArgs = escapeXml(psArgs);
+  const escapedUser = escapeXml(userIdentifier);
+  const escapedHome = escapeXml(homedir());
 
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -275,7 +293,7 @@ export function buildScheduledTaskXml(
   </RegistrationInfo>
   <Principals>
     <Principal id="Author">
-      <UserId>${userIdentifier}</UserId>
+      <UserId>${escapedUser}</UserId>
       <LogonType>InteractiveToken</LogonType>
       <RunLevel>LeastPrivilege</RunLevel>
     </Principal>
@@ -283,7 +301,7 @@ export function buildScheduledTaskXml(
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
-      <UserId>${userIdentifier}</UserId>
+      <UserId>${escapedUser}</UserId>
     </LogonTrigger>
   </Triggers>
   <Settings>
@@ -300,8 +318,8 @@ export function buildScheduledTaskXml(
   <Actions Context="Author">
     <Exec>
       <Command>powershell.exe</Command>
-      <Arguments>${psArgs}</Arguments>
-      <WorkingDirectory>${homedir()}</WorkingDirectory>
+      <Arguments>${escapedArgs}</Arguments>
+      <WorkingDirectory>${escapedHome}</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>
@@ -312,39 +330,67 @@ export function installWindowsScheduledTask(
   nodePath: string,
   cliPath: string,
   logDir: string,
+  opts: { verbose?: boolean } = {},
 ): InstallResult {
+  const verbose = opts.verbose === true;
+  const log = (msg: string) => { if (verbose) console.log(`[verbose] ${msg}`); };
+
   mkdirSync(logDir, { recursive: true });
 
   // Resolve current user identity. Prefer SID (unambiguous, works on
   // domain-joined machines); fall back to whoami's DOMAIN\user output;
   // last resort: bare USERNAME (works on standalone machines).
   let userIdentifier: string | null = getCurrentUserSid();
+  if (userIdentifier) log(`resolved user via SID: ${userIdentifier}`);
   if (!userIdentifier) {
     try {
       userIdentifier = execSync('whoami', { encoding: 'utf-8' }).trim();
+      if (userIdentifier) log(`resolved user via whoami: ${userIdentifier}`);
     } catch { /* ignore */ }
   }
   if (!userIdentifier) {
     userIdentifier = process.env['USERNAME'] ?? process.env['USER'] ?? basename(homedir());
+    log(`fell back to USERNAME env var: ${userIdentifier}`);
   }
 
   const xmlPath = join(logDir, 'task.xml');
+  const xml = buildScheduledTaskXml(nodePath, cliPath, logDir, userIdentifier);
   // UTF-16 LE with BOM — required by schtasks XML importer.
-  writeFileSync(xmlPath, '﻿' + buildScheduledTaskXml(nodePath, cliPath, logDir, userIdentifier), 'utf16le');
+  writeFileSync(xmlPath, '﻿' + xml, 'utf16le');
+  log(`wrote task XML to ${xmlPath} (${xml.length} chars)`);
 
+  let okOrSuccess = false;
   try {
     // Best-effort remove existing task before re-creating (idempotent).
     try { execSync(`schtasks /delete /tn "${DAEMON_LABEL}" /f`, { stdio: 'ignore' }); } catch { /* ok */ }
-    execSync(`schtasks /create /xml "${xmlPath}" /tn "${DAEMON_LABEL}" /f`, { stdio: 'pipe' });
+
+    const createCmd = `schtasks /create /xml "${xmlPath}" /tn "${DAEMON_LABEL}" /f`;
+    log(`running: ${createCmd}`);
+    execSync(createCmd, { stdio: 'pipe' });
+    log('schtasks /create succeeded');
+
     try { execSync(`schtasks /run /tn "${DAEMON_LABEL}"`, { stdio: 'pipe' }); } catch { /* ignore if immediate start fails */ }
+    okOrSuccess = true;
     return { ok: true };
   } catch (err) {
+    // Capture stderr from execSync's thrown error — that's where schtasks
+    // writes its actual diagnostic ("XML is malformed", "no SID mapping", etc.).
+    const stderr = (err as { stderr?: Buffer | string }).stderr?.toString().trim() ?? '';
+    const stdout = (err as { stdout?: Buffer | string }).stdout?.toString().trim() ?? '';
+    const detail = [stderr, stdout].filter(Boolean).join('\n');
     return {
       ok: false,
-      error: `schtasks failed: ${err instanceof Error ? err.message : err}`,
+      error:
+        `schtasks failed: ${err instanceof Error ? err.message : err}` +
+        (detail ? `\n\nschtasks output:\n${detail}` : '') +
+        `\n\nFailed task XML preserved at ${xmlPath} for inspection.` +
+        `\nRe-run with --verbose for more diagnostic detail.`,
     };
   } finally {
-    try { unlinkSync(xmlPath); } catch { /* ok */ }
+    // On success, clean up the XML. On failure, keep it so the user can inspect.
+    if (okOrSuccess) {
+      try { unlinkSync(xmlPath); } catch { /* ok */ }
+    }
   }
 }
 
@@ -500,6 +546,7 @@ export async function installWindows(
   nodePath: string,
   cliPath: string,
   logDir: string,
+  opts: { verbose?: boolean } = {},
 ): Promise<InstallResult> {
   // Migrate old (legacy) schtasks entry and tilde paths regardless of path.
   migrateFromSchtasks();
@@ -509,7 +556,7 @@ export async function installWindows(
   // No admin required. Starts on user logon, hidden window, auto-restarts.
   if (!isElevatedWindows()) {
     console.log('No Administrator privileges detected — installing as a hidden Scheduled Task (starts on logon).');
-    return installWindowsScheduledTask(nodePath, cliPath, logDir);
+    return installWindowsScheduledTask(nodePath, cliPath, logDir, opts);
   }
 
   // ── Admin: full NSSM Windows Service ───────────────────────────────────
@@ -608,7 +655,7 @@ export function getLogDir(): string {
   return `${homedir()}/.claude-usage-hub/logs`;
 }
 
-export async function install(): Promise<InstallResult> {
+export async function install(opts: { verbose?: boolean } = {}): Promise<InstallResult> {
   const os = detectPlatform();
   const { nodePath, cliPath } = resolveExecutable();
   const logDir = getLogDir();
@@ -616,7 +663,7 @@ export async function install(): Promise<InstallResult> {
   switch (os) {
     case 'macos': return Promise.resolve(installMacos(nodePath, cliPath, logDir));
     case 'linux': return Promise.resolve(installLinux(nodePath, cliPath, logDir));
-    case 'windows': return installWindows(nodePath, cliPath, logDir);
+    case 'windows': return installWindows(nodePath, cliPath, logDir, opts);
     default: return Promise.resolve({ ok: false, error: `Unsupported platform: ${platform()}` });
   }
 }

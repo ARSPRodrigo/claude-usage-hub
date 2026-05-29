@@ -1,6 +1,6 @@
 {
   "name": "claude-usage-hub",
-  "version": "0.4.2-beta",
+  "version": "0.4.3-beta",
   "private": true,
   "description": "Team-wide Claude Code usage monitoring tool",
   "scripts": {
