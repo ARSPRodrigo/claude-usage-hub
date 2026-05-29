@@ -6,7 +6,9 @@ const GITHUB_REPO = 'https://github.com/ARSPRodrigo/claude-usage-hub';
 
 const JUMP_TO: { label: string; id: string }[] = [
   { label: 'Quickstart', id: 'quickstart' },
+  { label: 'Windows install', id: 'windows-install' },
   { label: 'Roles & permissions', id: 'roles' },
+  { label: 'Organizations & workspaces', id: 'orgs' },
   { label: 'Privacy', id: 'privacy' },
   { label: 'FAQ', id: 'faq' },
 ];
@@ -30,48 +32,150 @@ export function HelpPage() {
             On each machine you use Claude Code, run the collector with your personal API key. It reads
             token metadata from <code className="mono text-xs bg-canvas-alt px-1.5 py-0.5 rounded-pill border border-line">~/.claude/projects/**</code> and posts it to the hub.
           </p>
+          <p className="mb-3">
+            Generate a key from <strong>Profile &amp; Keys</strong>, then copy the one-line install command
+            for your OS. The exact command (including a fresh key) is shown right there — these are
+            templates:
+          </p>
           <div className="bg-ink text-canvas p-3.5 rounded-btn mono text-[12.5px] leading-[1.7] overflow-auto">
-            <span className="text-ink-4"># install the collector</span><br />
-            npm install -g @usage-hub/collector<br />
+            <span className="text-ink-4"># macOS / Linux</span><br />
+            curl -sSL https://your-hub/install.sh | CHUB_API_KEY=chub_… sh<br />
             <br />
-            <span className="text-ink-4"># start reporting</span><br />
-            cuh-collect start --api-key <span className="text-accent">cuh_live_…</span>
+            <span className="text-ink-4"># Windows (admin not required — auto-detects)</span><br />
+            $env:CHUB_API_KEY='chub_…'; iwr https://your-hub/install.ps1 -OutFile<br />
+            &nbsp;&nbsp;"$env:TEMP\install-chub.ps1" -UseBasicParsing; powershell<br />
+            &nbsp;&nbsp;-ExecutionPolicy Bypass -File "$env:TEMP\install-chub.ps1"
           </div>
+          <p className="mt-3">
+            The installer downloads the collector, initializes config under your home directory, and
+            registers a background daemon: <strong>launchd</strong> on macOS, <strong>systemd user
+            service</strong> on Linux, or one of two backends on Windows (see next section).
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'windows-install',
+      label: 'H2',
+      title: 'Windows install',
+      body: (
+        <div className="text-[13.5px] text-ink-2 leading-relaxed space-y-3">
+          <p>
+            Windows ships with a <strong>self-contained <code className="mono text-xs bg-canvas-alt px-1 rounded">collector.exe</code></strong> built via Node SEA —
+            no Node.js installation required on the target machine.
+          </p>
+          <p>
+            The installer auto-detects whether your PowerShell is elevated and picks the right backend:
+          </p>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-line-2">
+                <th className="label text-left py-2">Shell</th>
+                <th className="label text-left py-2">Backend</th>
+                <th className="label text-left py-2">Starts on</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ['Administrator', 'Windows Service (via NSSM)', 'Boot — runs without anyone logged in'],
+                ['Standard user', 'Hidden Scheduled Task', 'User logon — no UAC prompt, no IT admin needed'],
+              ].map(([s, b, t], i) => (
+                <tr key={s} style={{ borderBottom: i === 1 ? 'none' : '1px solid var(--line-2)' }}>
+                  <td className="py-2.5 font-medium">{s}</td>
+                  <td className="py-2.5">{b}</td>
+                  <td className="py-2.5 text-ink-3">{t}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p>
+            Either backend runs hidden (no console window), restarts automatically on crash, and uploads
+            on a 5-minute cycle. Corporate machines where the developer isn't a local administrator can
+            still install with one command — the Scheduled Task path needs no elevation.
+          </p>
+          <p className="text-ink-3">
+            If something fails, re-run with <code className="mono text-xs bg-canvas-alt px-1 rounded">collector.exe install --verbose</code> for
+            full diagnostic output (resolved user SID, generated XML path, schtasks stderr).
+          </p>
         </div>
       ),
     },
     {
       id: 'roles',
-      label: 'H2',
+      label: 'H3',
       title: 'Roles & permissions',
       body: (
-        <div className="text-[13.5px]">
+        <div className="text-[13.5px] text-ink-2 leading-relaxed space-y-3">
+          <p>
+            The Hub has a five-tier role hierarchy. Two of them are <em>platform-level roles</em>
+            (stored on the user) and two are <em>grants</em> on individual orgs or workspaces (stored in
+            join tables, so one user can hold any combination).
+          </p>
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-line-2">
                 <th className="label text-left py-2">Role</th>
+                <th className="label text-left py-2">Type</th>
                 <th className="label text-left py-2">Can do</th>
               </tr>
             </thead>
             <tbody>
               {[
-                ['Primary Owner', 'Everything. One per org. Cannot be demoted.'],
-                ['Owner', 'Invite, wipe per-member data, configure retention.'],
-                ['Developer', 'See only their own dashboard, sessions and keys.'],
-              ].map(([r, c], i) => (
-                <tr key={r} style={{ borderBottom: i === 2 ? 'none' : '1px solid var(--line-2)' }}>
-                  <td className="py-2.5 font-medium">{r}</td>
-                  <td className="py-2.5 text-ink-2">{c}</td>
+                ['Platform Owner', 'Role (one)', 'Everything. The singular owner — can transfer ownership but not be removed.'],
+                ['Platform Admin', 'Role (many)', 'Manage orgs / workspaces / members across the whole platform. Cannot transfer the Platform Owner role.'],
+                ['Org Owner', 'Grant (per-org)', 'Manage workspaces, members, and grants inside a specific org. Can own multiple orgs.'],
+                ['Workspace Owner', 'Grant (per-workspace)', 'Manage one specific workspace inside an org.'],
+                ['Developer', 'Role (default)', 'See only their own usage. No admin or management surface.'],
+              ].map(([r, t, c], i, arr) => (
+                <tr key={r} style={{ borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+                  <td className="py-2.5 font-medium whitespace-nowrap">{r}</td>
+                  <td className="py-2.5 text-ink-3 whitespace-nowrap">{t}</td>
+                  <td className="py-2.5">{c}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <p className="text-ink-3">
+            Org Owner and Workspace Owner are <em>grants</em>, not exclusive roles — a Platform Admin
+            can also own specific orgs, and a Developer can be granted Workspace Owner without becoming
+            a Platform Admin.
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'orgs',
+      label: 'H4',
+      title: 'Organizations & workspaces',
+      body: (
+        <div className="text-[13.5px] text-ink-2 leading-relaxed space-y-3">
+          <p>
+            <strong>Organizations</strong> are top-level, parallel containers — there's no hierarchy
+            between them. Inside each org you can create <strong>workspaces</strong> (team-level groups
+            for billing, scoping dashboards, etc.).
+          </p>
+          <p>
+            Every user has one <em>active</em> org + workspace membership at a time. When you move
+            someone, historical usage stays attributed to where it was generated (time-bounded
+            memberships); only new entries flow to the new org/workspace. This means you can re-org
+            members without losing history.
+          </p>
+          <p>
+            The <code className="mono text-xs bg-canvas-alt px-1 rounded">DEFAULT</code> badge on one
+            organization in the Manage UI marks the migration-origin org — the system refuses to delete
+            it because it holds pre-migration data. It behaves identically to any other org otherwise.
+          </p>
+          <p className="text-ink-3">
+            <strong>Domain auto-assign rules</strong> (Manage → Domain rules) automatically route new
+            sign-ups to a specific org + workspace based on their email domain — useful for onboarding a
+            whole team without manual invites.
+          </p>
         </div>
       ),
     },
     {
       id: 'privacy',
-      label: 'H3',
+      label: 'H5',
       title: 'Privacy',
       body: (
         <div className="text-[13.5px] text-ink-2 leading-relaxed">
@@ -90,7 +194,10 @@ export function HelpPage() {
     ['Where does my data live?', 'On the hub server you self-host, in a SQLite file with 0600 permissions. Nothing is sent to Anthropic or any third party.'],
     ['How do project aliases work?', 'Each project directory is hashed with a unique per-machine salt into a human-readable alias (e.g. "autumn-river"). The original path is never sent to the server, and the same project produces different aliases on different machines — making cross-machine correlation impossible.'],
     ['Can multiple machines share one API key?', 'No. Each API key is tied to one machine. Generate a separate key per machine from your Profile page so you can track and revoke them independently.'],
-    ['How often does the collector sync?', 'Every 30 minutes by default. The collector reads new JSONL entries since its last run, deduplicates streaming entries (keeps only the final token count per message), and posts the batch to the server.'],
+    ['How often does the collector sync?', 'Every 5 minutes by default (configurable via intervalMinutes in config.json). The collector reads new JSONL entries since its last run, deduplicates streaming entries (keeps only the final token count per message), and posts the batch to the server.'],
+    ['Do I need Administrator privileges on Windows?', 'No. The installer auto-detects: if your PowerShell is elevated it registers a Windows Service (boot-start); if not, it registers a hidden user-context Scheduled Task (logon-start). Both run with no visible console window and restart automatically on crash. Corporate developers who don\'t have local admin can install with one command.'],
+    ['Do I need Node.js installed on Windows?', 'No. The Hub serves a self-contained collector.exe built via Node SEA (~90 MB), which bundles the Node.js runtime. The installer downloads it automatically. The dashboard\'s install snippet falls back to collector.js + Node.js only if the .exe isn\'t available on the Hub.'],
+    ['Where are the collector logs?', 'macOS / Linux: ~/.claude-usage-hub/logs/collector.log. Windows: %USERPROFILE%\\.claude-usage-hub\\logs\\collector.log. You can tail it with `tail -f` (Unix) or `Get-Content -Wait` (PowerShell).'],
     ['What happens if the server is down?', 'The collector will retry on the next sync cycle. Local JSONL files are the source of truth — no data is lost. Entries will be picked up once the server is reachable again.'],
     ['Can I delete a machine?', 'Revoke its API key on the Profile & Keys page. Historical entries are preserved unless you explicitly wipe them.'],
     ['What if I rotate keys?', 'Generate a new key, install it on the machine, revoke the old one. Historical entries stay tied to the machine alias, not the key.'],
