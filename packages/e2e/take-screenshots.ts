@@ -81,6 +81,22 @@ async function setTheme(page: import('@playwright/test').Page, dark: boolean) {
   await page.goto(`${BASE}/help`);
   await shot(page, 'help-light');
 
+  // ── Manage UI (Platform Owner sees all sections) ─────────────────────────
+  await page.goto(`${BASE}/manage/organizations`);
+  await shot(page, 'manage-organizations-light');
+
+  await page.goto(`${BASE}/manage/workspaces`);
+  await shot(page, 'manage-workspaces-light');
+
+  await page.goto(`${BASE}/manage/members`);
+  await shot(page, 'manage-members-light');
+
+  await page.goto(`${BASE}/manage/domain-rules`);
+  await shot(page, 'manage-domain-rules-light');
+
+  await page.goto(`${BASE}/manage/audit`);
+  await shot(page, 'manage-audit-light');
+
   // ── Dark mode screenshots ──────────────────────────────────────────────────
   await setTheme(page, true);
 

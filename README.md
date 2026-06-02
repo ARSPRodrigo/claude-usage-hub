@@ -2,7 +2,7 @@
 
 A self-hosted, open-source tool for monitoring Claude Code token usage across your entire team. Track token consumption, cost breakdowns, and per-developer visibility — all from a central web dashboard.
 
-> **v1.0.0** — Multi-org support, workspaces, role hierarchy, team leaderboard, cost comparison, and the Signal UI redesign.
+> **v0.4.3-beta** — Multi-org, workspaces, 5-tier role hierarchy, smart Windows installer (no admin / Node.js required), team leaderboard, cost comparison, audit log, and the Signal UI redesign.
 
 ## Screenshots
 
@@ -32,6 +32,16 @@ A self-hosted, open-source tool for monitoring Claude Code token usage across yo
 
 ### Help & Docs
 ![Help](docs/screenshots/help-light.png)
+
+### Manage — Organizations, Workspaces, Members, Domain rules, Audit log
+
+Platform Admins and Org Owners get a `Manage` section for day-to-day administration of the org/workspace structure.
+
+![Manage › Organizations](docs/screenshots/manage-organizations-light.png)
+![Manage › Workspaces](docs/screenshots/manage-workspaces-light.png)
+![Manage › Members](docs/screenshots/manage-members-light.png)
+![Manage › Domain rules](docs/screenshots/manage-domain-rules-light.png)
+![Manage › Audit log](docs/screenshots/manage-audit-light.png)
 
 ## Features
 
