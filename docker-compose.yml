@@ -10,6 +10,12 @@ services:
     env_file:
       - .env
 
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    depends_on:
+      - server
 
 volumes:
   data:
