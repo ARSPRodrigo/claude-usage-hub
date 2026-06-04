@@ -6,7 +6,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useHealth } from '@/api/hooks';
-import { getUser, clearAuth, isPlatformAdmin, canManage } from '@/api/client';
+import { getUser, clearAuth, isPlatformAdmin, isWorkspaceAdmin, canManage } from '@/api/client';
 
 type Page =
   | 'dashboard' | 'sessions' | 'projects' | 'cost-comparison' | 'leaderboard' | 'profile'
@@ -26,6 +26,7 @@ const ROLE_LABELS: Record<string, string> = {
   platform_admin: 'Platform Admin',
   primary_owner: 'Platform Owner', // legacy
   owner: 'Platform Admin',          // legacy
+  workspace_admin: 'Workspace Admin',
   developer: 'Developer',
 };
 
@@ -33,7 +34,10 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
   const health = useHealth();
   const user = getUser();
   const isAdmin = isPlatformAdmin(user?.role);
+  const isWsAdmin = isWorkspaceAdmin(user?.role);
   const showManageSection = canManage(user);
+  // workspace_admin sees only workspace-scoped items; platform admins/org owners see full section.
+  const showOrgManage = showManageSection && !isWsAdmin;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -108,7 +112,7 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
           <NavItem id="leaderboard" label="Leaderboard" icon={Trophy} />
         </ul>
 
-        {showManageSection && (
+        {showOrgManage && (
           <>
             <div className="label px-1.5 pt-4.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>Organization</div>
             <ul className="flex flex-col gap-0.5">
@@ -123,6 +127,16 @@ export function Sidebar({ activePage, onNavigate, dark, setDark }: SidebarProps)
               <NavItem id="manage-workspaces" label="Workspaces" icon={Layers} />
               <NavItem id="manage-members" label="Members" icon={Users} />
               {isAdmin && <NavItem id="manage-domain-rules" label="Domain rules" icon={AtSign} />}
+              <NavItem id="manage-audit" label="Audit log" icon={FileClock} />
+            </ul>
+          </>
+        )}
+
+        {isWsAdmin && showManageSection && (
+          <>
+            <div className="label px-1.5 pt-4.5 pb-1.5" style={{ color: 'var(--ink-2)' }}>Workspace</div>
+            <ul className="flex flex-col gap-0.5">
+              <NavItem id="manage-members" label="Members" icon={Users} />
               <NavItem id="manage-audit" label="Audit log" icon={FileClock} />
             </ul>
           </>

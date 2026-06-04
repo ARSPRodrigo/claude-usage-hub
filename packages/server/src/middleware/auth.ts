@@ -1,7 +1,7 @@
 import type { Next } from 'hono';
 import { sign, verify } from 'hono/utils/jwt/jwt';
 import type { AuthContext, UserRole } from '@claude-usage-hub/shared';
-import { JWT_EXPIRATION_SECONDS, isPlatformAdminRole, isPlatformOwnerRole } from '@claude-usage-hub/shared';
+import { JWT_EXPIRATION_SECONDS, isPlatformAdminRole, isPlatformOwnerRole, isWorkspaceAdminRole } from '@claude-usage-hub/shared';
 import { findApiKeyByHash, findUserById, updateApiKeyLastUsed } from '../db/auth-repository.js';
 import {
   getActiveOrgMembership,
@@ -203,7 +203,9 @@ export function canAccessWorkspace(auth: AuthContext | undefined, wsId: string):
 
 /**
  * Returns the set of org IDs the caller can act on, or null for unrestricted
- * (platform-like) callers. Use this when filtering list endpoints.
+ * (platform-like) callers. workspace_admin has no org-level authority so their
+ * set is empty — callers that need workspace-level filtering should use
+ * accessibleWorkspaceIds instead.
  */
 export function accessibleOrgIds(auth: AuthContext | undefined): Set<string> | null {
   if (!auth || isPlatformLike(auth)) return null;
@@ -211,8 +213,19 @@ export function accessibleOrgIds(auth: AuthContext | undefined): Set<string> | n
 }
 
 /**
+ * Returns the set of workspace IDs the caller can act on, or null for
+ * unrestricted (platform-like) callers. Primarily used by workspace_admin
+ * to scope list endpoints to their owned workspaces.
+ */
+export function accessibleWorkspaceIds(auth: AuthContext | undefined): Set<string> | null {
+  if (!auth || isPlatformLike(auth)) return null;
+  return new Set(auth.ownedWorkspaceIds ?? []);
+}
+
+/**
  * Mount-level guard for /api/v1/admin/*. Lets through:
  *   - Platform admins / owners (full access)
+ *   - workspace_admin with at least one workspace ownership grant
  *   - Any user with at least one org or workspace ownership grant
  * Per-route guards (`requirePlatformAdmin`, `requirePlatformOwner`) and
  * handler-level scope checks tighten access on individual endpoints.
@@ -221,8 +234,9 @@ export async function requireAdminOrOwner(c: Context, next: Next): Promise<void 
   const auth = c.get('auth') as AuthContext | undefined;
   if (!auth) return c.json({ error: 'Auth required' }, 401);
   const isAdmin = isPlatformAdminRole(auth.role);
+  const isWsAdmin = isWorkspaceAdminRole(auth.role) && (auth.ownedWorkspaceIds?.length ?? 0) > 0;
   const isOwner = (auth.ownedOrgIds?.length ?? 0) > 0 || (auth.ownedWorkspaceIds?.length ?? 0) > 0;
-  if (!isAdmin && !isOwner) {
+  if (!isAdmin && !isWsAdmin && !isOwner) {
     return c.json({ error: 'Admin or owner access required' }, 403);
   }
   await next();

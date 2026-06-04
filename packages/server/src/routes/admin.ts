@@ -52,24 +52,25 @@ import {
   canAccessOrg,
   canAccessWorkspace,
   accessibleOrgIds,
+  accessibleWorkspaceIds,
   isPlatformLike,
 } from '../middleware/auth.js';
 
 const VALID_RANGES = new Set(['5h', '24h', '7d', '30d', 'all']);
 const admin = new Hono<AppEnv>();
 
-/** Can the caller view a specific developer's stats? Looks up the developer's
- *  current org membership and checks the caller has access to that org. */
+/** Can the caller view a specific developer's stats? Checks org ownership
+ *  (for org owners) or workspace ownership (for workspace_admin). */
 function canAccessDeveloper(auth: AuthContext | undefined, developerId: string): boolean {
   if (!auth) return false;
   if (isPlatformLike(auth)) return true;
-  // Resolve developerId → user → active org. listUsers() returns all so this
-  // is O(n) over users; fine at our scale.
   const target = listUsers().find((u) => u.developer_id === developerId);
   if (!target) return false;
   const targetOrg = getActiveOrgMembership(target.id);
-  if (!targetOrg) return false;
-  return (auth.ownedOrgIds ?? []).includes(targetOrg.orgId);
+  if (targetOrg && (auth.ownedOrgIds ?? []).includes(targetOrg.orgId)) return true;
+  const targetWs = getActiveWorkspaceMembership(target.id);
+  if (targetWs && (auth.ownedWorkspaceIds ?? []).includes(targetWs.workspaceId)) return true;
+  return false;
 }
 
 /**
@@ -94,11 +95,19 @@ function parseScope(c: { req: { query: (k: string) => string | undefined }; get:
   if (!validOrg || !validWs) return {};
 
   // Platform admin / owner: trust the request.
-  // Compare as string to allow legacy role values during rollout.
   const role = String(auth?.role ?? '');
   const isPlatform =
     role === 'platform_owner' || role === 'platform_admin' || role === 'primary_owner' || role === 'owner';
   if (isPlatform) return { ...(orgId ? { organizationId: orgId } : {}), ...(wsId ? { workspaceId: wsId } : {}) };
+
+  // workspace_admin: only allow scoping to workspaces they own.
+  if (role === 'workspace_admin') {
+    const ownedWs = auth?.ownedWorkspaceIds ?? [];
+    if (wsId && !ownedWs.includes(wsId)) return {};
+    // If no workspaceId given, default to their active workspace.
+    const effectiveWsId = wsId ?? auth?.activeWorkspaceId ?? undefined;
+    return effectiveWsId ? { workspaceId: effectiveWsId } : {};
+  }
 
   // Org owner: only allow scoping to orgs they own.
   const ownedOrgs = auth?.ownedOrgIds ?? [];
@@ -160,9 +169,9 @@ admin.patch('/developers/:id/role', requirePlatformAdmin, async (c) => {
   const body = await c.req.json() as { role?: string };
 
   // Accept both new and legacy role names so the UI can keep using either during rollout.
-  const validRoles = ['platform_admin', 'developer', 'owner'];
+  const validRoles = ['platform_admin', 'workspace_admin', 'developer', 'owner'];
   if (!body.role || !validRoles.includes(body.role)) {
-    return c.json({ error: 'Invalid role. Must be "platform_admin" or "developer".' }, 400);
+    return c.json({ error: 'Invalid role. Must be "platform_admin", "workspace_admin", or "developer".' }, 400);
   }
   // Normalise legacy "owner" → "platform_admin".
   const normalisedRole = body.role === 'owner' ? 'platform_admin' : body.role;
@@ -522,7 +531,9 @@ admin.get('/members', (c) => {
   const auth = c.get('auth') as AuthContext | undefined;
   const orgId = c.req.query('orgId');
   const workspaceId = c.req.query('workspaceId');
-  const allowed = accessibleOrgIds(auth);
+  const isWsAdmin = auth?.role === 'workspace_admin';
+  const allowedOrgs = isWsAdmin ? new Set<string>() : accessibleOrgIds(auth);
+  const allowedWs = isWsAdmin ? accessibleWorkspaceIds(auth) : null;
   const users = listUsers();
   const orgOwns = allOrgOwnerships();
   const wsOwns = allWorkspaceOwnerships();
@@ -545,9 +556,12 @@ admin.get('/members', (c) => {
         };
       })
       .filter((m) => {
-        if (allowed !== null) {
+        if (isWsAdmin) {
+          // workspace_admin: only see members in their owned workspaces.
+          if (!allowedWs || !m.currentWorkspaceId || !allowedWs.has(m.currentWorkspaceId)) return false;
+        } else if (allowedOrgs !== null) {
           // Org owner: only see members whose current org is one they own.
-          if (!m.currentOrgId || !allowed.has(m.currentOrgId)) return false;
+          if (!m.currentOrgId || !allowedOrgs.has(m.currentOrgId)) return false;
         }
         if (orgId && m.currentOrgId !== orgId) return false;
         if (workspaceId && m.currentWorkspaceId !== workspaceId) return false;

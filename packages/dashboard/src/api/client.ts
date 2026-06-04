@@ -7,7 +7,7 @@ export interface StoredUser {
   displayName: string;
   // Accept both new and legacy role names (existing JWTs from before the
   // role-rename rollout still carry primary_owner / owner).
-  role: 'platform_owner' | 'platform_admin' | 'developer' | 'primary_owner' | 'owner';
+  role: 'platform_owner' | 'platform_admin' | 'workspace_admin' | 'developer' | 'primary_owner' | 'owner';
   developerId: string;
   /** Org IDs the user owns (from org_owners join table). Empty for plain developers. */
   ownedOrgIds?: string[];
@@ -22,11 +22,15 @@ export function isPlatformAdmin(role: string | undefined): boolean {
 export function isPlatformOwner(role: string | undefined): boolean {
   return role === 'platform_owner' || role === 'primary_owner';
 }
+export function isWorkspaceAdmin(role: string | undefined): boolean {
+  return role === 'workspace_admin';
+}
 
 /** True if the user can access at least some part of the Manage UI. */
 export function canManage(user: StoredUser | null): boolean {
   if (!user) return false;
   if (isPlatformAdmin(user.role)) return true;
+  if (isWorkspaceAdmin(user.role)) return (user.ownedWorkspaceIds?.length ?? 0) > 0;
   return (user.ownedOrgIds?.length ?? 0) > 0 || (user.ownedWorkspaceIds?.length ?? 0) > 0;
 }
 

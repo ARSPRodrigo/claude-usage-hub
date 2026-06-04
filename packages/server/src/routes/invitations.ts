@@ -65,11 +65,14 @@ invitations.post('/', async (c) => {
     return c.json({ error: 'email is too long' }, 400);
   }
 
-  // Accept legacy 'owner' and new 'platform_admin'; normalise to new vocabulary.
-  const role = (body.role === 'owner' || body.role === 'platform_admin') ? 'platform_admin' : 'developer';
+  // Normalise role: accept legacy 'owner', new platform/workspace roles, default to 'developer'.
+  const rawRole = body.role ?? 'developer';
+  const role: string = (rawRole === 'owner' || rawRole === 'platform_admin')
+    ? 'platform_admin'
+    : (rawRole === 'workspace_admin' ? 'workspace_admin' : 'developer');
 
   // Validate org/workspace if provided.
-  const orgId = body.orgId ?? null;
+  let orgId = body.orgId ?? null;
   const workspaceId = body.workspaceId ?? null;
   if (orgId && !findOrganizationById(orgId)) {
     return c.json({ error: 'Organization not found' }, 400);
@@ -80,12 +83,25 @@ invitations.post('/', async (c) => {
     if (orgId && ws.orgId !== orgId) {
       return c.json({ error: 'Workspace does not belong to the chosen organization' }, 400);
     }
+    // Auto-fill orgId from workspace so the invitee lands in the right org.
+    if (!orgId) orgId = ws.orgId;
   }
 
-  // Scope check: org owners can only invite into orgs they own. If no orgId
-  // was provided, the invite defaults to 'default' at accept-time — only
-  // platform admins should be able to create those org-less invites.
-  if (!orgId) {
+  // Scope check:
+  //   - workspace_admin: must specify a workspace they own; cannot invite platform_admin.
+  //   - org owner: can invite into orgs they own.
+  //   - platform admin: unrestricted.
+  if (auth.role === 'workspace_admin') {
+    if (!workspaceId) {
+      return c.json({ error: 'Workspace admins must specify a workspace when inviting' }, 403);
+    }
+    if (!(auth.ownedWorkspaceIds ?? []).includes(workspaceId)) {
+      return c.json({ error: 'Forbidden: you do not manage that workspace' }, 403);
+    }
+    if (role === 'platform_admin') {
+      return c.json({ error: 'Workspace admins cannot invite platform admins' }, 403);
+    }
+  } else if (!orgId) {
     const allowed = accessibleOrgIds(auth);
     if (allowed !== null) {
       return c.json({ error: 'Specify an organization you own' }, 403);
@@ -147,8 +163,11 @@ invitations.post('/bulk', async (c) => {
     if (!email) return { email: row.email ?? '', error: 'email is required' };
     if (email.length > 254) return { email, error: 'email is too long' };
 
-    const role = (row.role === 'owner' || row.role === 'platform_admin') ? 'platform_admin' : 'developer';
-    const orgId = row.orgId ?? null;
+    const rawRole = row.role ?? 'developer';
+    const role: string = (rawRole === 'owner' || rawRole === 'platform_admin')
+      ? 'platform_admin'
+      : (rawRole === 'workspace_admin' ? 'workspace_admin' : 'developer');
+    let orgId = row.orgId ?? null;
     const workspaceId = row.workspaceId ?? null;
 
     if (orgId && !findOrganizationById(orgId)) return { email, error: 'Organization not found' };
@@ -156,10 +175,15 @@ invitations.post('/bulk', async (c) => {
       const ws = findWorkspaceById(workspaceId);
       if (!ws) return { email, error: 'Workspace not found' };
       if (orgId && ws.orgId !== orgId) return { email, error: 'Workspace does not belong to the chosen organization' };
+      if (!orgId) orgId = ws.orgId;
     }
 
     // Scope check (same rules as the single-invite endpoint).
-    if (allowed !== null) {
+    if (auth.role === 'workspace_admin') {
+      if (!workspaceId) return { email, error: 'Workspace admins must specify a workspace when inviting' };
+      if (!(auth.ownedWorkspaceIds ?? []).includes(workspaceId)) return { email, error: 'Forbidden: you do not manage that workspace' };
+      if (role === 'platform_admin') return { email, error: 'Workspace admins cannot invite platform admins' };
+    } else if (allowed !== null) {
       if (!orgId) return { email, error: 'Specify an organization you own' };
       if (!allowed.has(orgId)) return { email, error: 'Forbidden: you do not own that organization' };
     }
@@ -192,12 +216,17 @@ invitations.get('/', (c) => {
   const orgId = c.req.query('orgId');
   const workspaceId = c.req.query('workspaceId');
   const rows = listInvitations();
-  const allowed = accessibleOrgIds(auth);
+  const isWsAdmin = auth.role === 'workspace_admin';
+  const allowed = isWsAdmin ? new Set<string>() : accessibleOrgIds(auth);
+  const ownedWs = new Set(auth.ownedWorkspaceIds ?? []);
   return c.json(
     rows
       .filter((r) => {
-        // Org-owner scope: only see invitations into orgs they own.
-        if (allowed !== null) {
+        if (isWsAdmin) {
+          // workspace_admin: only see invitations into workspaces they manage.
+          if (!r.workspace_id || !ownedWs.has(r.workspace_id)) return false;
+        } else if (allowed !== null) {
+          // Org-owner scope: only see invitations into orgs they own.
           if (!r.org_id || !allowed.has(r.org_id)) return false;
         }
         if (orgId && r.org_id !== orgId) return false;
@@ -226,11 +255,18 @@ invitations.delete('/:id', (c) => {
   const inv = findInvitationById(id);
   if (!inv) return c.json({ error: 'Invitation not found' }, 404);
 
-  // Scope check: org owner can only revoke invites into orgs they own.
-  const allowed = accessibleOrgIds(auth);
-  if (allowed !== null) {
-    if (!inv.org_id || !allowed.has(inv.org_id)) {
+  // Scope check: workspace_admin scoped to their workspaces; org owners to their orgs.
+  if (auth.role === 'workspace_admin') {
+    const ownedWs = new Set(auth.ownedWorkspaceIds ?? []);
+    if (!inv.workspace_id || !ownedWs.has(inv.workspace_id)) {
       return c.json({ error: 'Forbidden' }, 403);
+    }
+  } else {
+    const allowed = accessibleOrgIds(auth);
+    if (allowed !== null) {
+      if (!inv.org_id || !allowed.has(inv.org_id)) {
+        return c.json({ error: 'Forbidden' }, 403);
+      }
     }
   }
 

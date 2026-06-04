@@ -96,15 +96,18 @@ export type AliasMap = Record<string, string>;
 /**
  * Platform-level roles (column `users.role`).
  *
- *  - platform_owner: exactly one per Hub. Cannot be deleted; can be transferred.
- *  - platform_admin: many allowed. Can manage all orgs/workspaces.
- *  - developer:      default. Org/workspace ownership lives in join tables
- *                    (org_owners, workspace_owners), not on the user row.
+ *  - platform_owner:   exactly one per Hub. Cannot be deleted; can be transferred.
+ *  - platform_admin:   many allowed. Can manage all orgs/workspaces.
+ *  - workspace_admin:  scoped to owned workspaces only. Can invite/remove members
+ *                      and manage API keys within their workspace. Cannot see other
+ *                      workspaces or orgs, and cannot create/delete workspaces.
+ *  - developer:        default. Org/workspace ownership lives in join tables
+ *                      (org_owners, workspace_owners), not on the user row.
  *
  * Legacy values primary_owner / owner are accepted by isAdminRole() and
  * isPlatformOwner() so the app keeps working between deploy + migration.
  */
-export type UserRole = 'platform_owner' | 'platform_admin' | 'developer';
+export type UserRole = 'platform_owner' | 'platform_admin' | 'workspace_admin' | 'developer';
 
 /** Legacy role names retained for migration / backwards compat checks. */
 export type LegacyUserRole = 'primary_owner' | 'owner';
@@ -124,6 +127,9 @@ export const PLATFORM_OWNER_ROLES: readonly string[] = [
   'primary_owner', // legacy
 ] as const;
 
+/** Workspace-admin role — scoped to owned workspaces, no org-level authority. */
+export const WORKSPACE_ADMIN_ROLES: readonly string[] = ['workspace_admin'] as const;
+
 /** Check if a role grants platform-admin reach (legacy-tolerant). */
 export function isPlatformAdminRole(role: string): boolean {
   return PLATFORM_ADMIN_ROLES.includes(role);
@@ -132,6 +138,11 @@ export function isPlatformAdminRole(role: string): boolean {
 /** Check if a role is the singular platform owner (legacy-tolerant). */
 export function isPlatformOwnerRole(role: string): boolean {
   return PLATFORM_OWNER_ROLES.includes(role);
+}
+
+/** Check if a role is workspace_admin. */
+export function isWorkspaceAdminRole(role: string): boolean {
+  return WORKSPACE_ADMIN_ROLES.includes(role);
 }
 
 /** @deprecated Use isPlatformAdminRole. Retained for callers mid-migration. */

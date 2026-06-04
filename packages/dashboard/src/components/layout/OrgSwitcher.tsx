@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Building2, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getUser, isPlatformAdmin } from '@/api/client';
+import { getUser, isPlatformAdmin, isWorkspaceAdmin } from '@/api/client';
 import { useOrgList, useWorkspaceList } from '@/api/hooks';
 import { useScope, setScope } from '@/lib/scope';
 
@@ -17,11 +17,14 @@ export function OrgSwitcher() {
   const scope = useScope();
 
   const isPlatform = isPlatformAdmin(user?.role);
+  const isWsAdmin = isWorkspaceAdmin(user?.role);
   const isOrgOwner = (user?.ownedOrgIds?.length ?? 0) > 0 || (user?.ownedWorkspaceIds?.length ?? 0) > 0;
 
   const { data: orgs = [] } = useOrgList();
   const { data: workspaces = [] } = useWorkspaceList(scope.orgId ?? null);
 
+  // workspace_admin is locked to their single workspace — no switcher needed.
+  if (isWsAdmin) return null;
   // Hide entirely for plain developers. Platform admins always see it; org
   // owners see it once they have at least one accessible org.
   if (!isPlatform && !isOrgOwner) return null;
