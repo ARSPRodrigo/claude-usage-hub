@@ -102,14 +102,20 @@ export function createApp(mode: AppMode = 'local'): Hono<AppEnv> {
   // Serve dashboard static files + SPA index.html fallback
   const distPath = getDashboardDistPath();
   if (existsSync(distPath)) {
+    // Content-hashed assets: long cache, immutable.
+    app.use('/assets/*', async (c, next) => {
+      await next();
+      c.header('Cache-Control', 'public, max-age=31536000, immutable');
+    });
     app.use('/assets/*', serveStatic({ root: distPath }));
     app.use('/favicon*', serveStatic({ root: distPath }));
-    // SPA fallback — all remaining routes return index.html
+    // SPA fallback — never cache so Cloudflare can't capture a stale entry.
     app.get('*', (c) => {
       const indexPath = resolve(distPath, 'index.html');
       if (existsSync(indexPath)) {
         const html = readFileSync(indexPath, 'utf-8');
         c.header('Content-Type', 'text/html; charset=utf-8');
+        c.header('Cache-Control', 'no-store');
         return c.body(html);
       }
       return c.json({ error: 'Dashboard not built' }, 404);
