@@ -65,7 +65,7 @@ export function AdminTeamPage() {
   const currentUser = getUser();
   const scope = useScope();
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'developer' | 'owner'>('developer');
+  const [inviteRole, setInviteRole] = useState<'developer' | 'workspace_admin' | 'owner'>('developer');
   // Invite form defaults: prefer the top-bar scope, fall back to default org/ws.
   const [inviteOrgId, setInviteOrgId] = useState<string>(scope.orgId ?? 'default');
   const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string>(scope.workspaceId ?? 'default-ws');
@@ -187,12 +187,13 @@ export function AdminTeamPage() {
             />
             <select
               value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as 'developer' | 'owner')}
+              onChange={(e) => setInviteRole(e.target.value as 'developer' | 'workspace_admin' | 'owner')}
               className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
               title="Role"
             >
               <option value="developer">Developer</option>
-              <option value="owner">Admin</option>
+              <option value="workspace_admin">Workspace Admin</option>
+              <option value="owner">Platform Admin</option>
             </select>
             <select
               value={inviteOrgId}
@@ -327,7 +328,8 @@ export function AdminTeamPage() {
                     className="mono text-[10.5px] px-2 py-1 rounded-pill border border-line bg-surface text-ink"
                     style={{ letterSpacing: '0.04em' }}
                   >
-                    <option value="platform_admin">Admin</option>
+                    <option value="platform_admin">Platform Admin</option>
+                    <option value="workspace_admin">Workspace Admin</option>
                     <option value="developer">Developer</option>
                   </select>
                 )}
@@ -380,7 +382,7 @@ function BulkInviteModal({
 }: {
   defaultOrgId: string;
   defaultWorkspaceId: string;
-  defaultRole: 'developer' | 'owner';
+  defaultRole: 'developer' | 'workspace_admin' | 'owner';
   orgs: Array<{ id: string; name: string }>;
   onClose: () => void;
   onDone: () => void;
@@ -388,7 +390,7 @@ function BulkInviteModal({
   const [text, setText] = useState('');
   const [orgId, setOrgId] = useState(defaultOrgId);
   const [workspaceId, setWorkspaceId] = useState(defaultWorkspaceId);
-  const [role, setRole] = useState<'developer' | 'owner'>(defaultRole);
+  const [role, setRole] = useState<'developer' | 'workspace_admin' | 'owner'>(defaultRole);
   const { data: workspaces = [] } = useWorkspaceList(orgId);
   const [results, setResults] = useState<BulkResult[] | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
@@ -494,11 +496,12 @@ function BulkInviteModal({
                   <label className="label block mb-1.5">Role</label>
                   <select
                     value={role}
-                    onChange={(e) => setRole(e.target.value as 'developer' | 'owner')}
+                    onChange={(e) => setRole(e.target.value as 'developer' | 'workspace_admin' | 'owner')}
                     className="w-full px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
                   >
                     <option value="developer">Developer</option>
-                    <option value="owner">Admin</option>
+                    <option value="workspace_admin">Workspace Admin</option>
+                    <option value="owner">Platform Admin</option>
                   </select>
                 </div>
               </div>
