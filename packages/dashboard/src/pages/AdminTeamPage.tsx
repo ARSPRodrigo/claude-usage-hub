@@ -115,10 +115,10 @@ export function AdminTeamPage() {
   });
 
   const createInvite = useMutation({
-    mutationFn: ({ email, role, orgId, workspaceId }: { email: string; role: string; orgId: string; workspaceId: string }) =>
+    mutationFn: ({ email, role, orgId, workspaceId }: { email: string; role: string; orgId: string; workspaceId?: string }) =>
       apiPost<{ id: string; inviteUrl: string; email: string; expiresAt: string; role: string }>(
         '/api/v1/admin/invitations',
-        { email, role, orgId, workspaceId },
+        { email, role, orgId, ...(workspaceId ? { workspaceId } : {}) },
       ),
     onSuccess: (data) => {
       setInviteUrl(data.inviteUrl);
@@ -183,7 +183,11 @@ export function AdminTeamPage() {
               onChange={(e) => { setInviteEmail(e.target.value); setInviteUrl(null); }}
               placeholder="name@example.com"
               className="px-3 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none w-60"
-              onKeyDown={(e) => { if (e.key === 'Enter' && inviteEmail.trim()) createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteWorkspaceId }); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && inviteEmail.trim()) {
+                  createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteRole === 'owner' ? undefined : inviteWorkspaceId });
+                }
+              }}
             />
             <select
               value={inviteRole}
@@ -210,24 +214,27 @@ export function AdminTeamPage() {
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
             </select>
-            <select
-              value={inviteWorkspaceId}
-              onChange={(e) => setInviteWorkspaceId(e.target.value)}
-              className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
-              title="Workspace"
-              disabled={workspacesForInvite.length === 0}
-            >
-              {workspacesForInvite.length === 0 && <option value="">No workspaces…</option>}
-              {workspacesForInvite.map((w) => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-              ))}
-            </select>
+            {/* Workspace selector — hidden for Platform Admin (platform-wide role, no workspace needed) */}
+            {inviteRole !== 'owner' && (
+              <select
+                value={inviteWorkspaceId}
+                onChange={(e) => setInviteWorkspaceId(e.target.value)}
+                className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+                title="Workspace"
+                disabled={workspacesForInvite.length === 0}
+              >
+                {workspacesForInvite.length === 0 && <option value="">No workspaces…</option>}
+                {workspacesForInvite.map((w) => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            )}
             <button
               onClick={() => {
-                if (!inviteEmail.trim() || !inviteWorkspaceId) return;
-                createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteWorkspaceId });
+                if (!inviteEmail.trim()) return;
+                createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteRole === 'owner' ? undefined : inviteWorkspaceId });
               }}
-              disabled={!inviteEmail.trim() || !inviteWorkspaceId || createInvite.isPending}
+              disabled={!inviteEmail.trim() || (inviteRole !== 'owner' && !inviteWorkspaceId) || createInvite.isPending}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -235,7 +242,7 @@ export function AdminTeamPage() {
             </button>
             <button
               onClick={() => setBulkOpen(true)}
-              disabled={!inviteWorkspaceId}
+              disabled={inviteRole !== 'owner' && !inviteWorkspaceId}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line bg-surface text-ink rounded-btn text-[13px] font-medium hover:bg-canvas-alt disabled:opacity-50"
               title="Invite many people at once"
             >
