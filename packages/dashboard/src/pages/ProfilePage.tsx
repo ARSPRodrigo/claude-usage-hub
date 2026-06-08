@@ -24,6 +24,7 @@ interface NewKeyResponse {
 }
 
 type Platform = 'mac' | 'linux' | 'linux-vm' | 'windows';
+type SnippetMode = 'install' | 'migrate';
 
 async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   const url = new URL(path, window.location.origin);
@@ -73,6 +74,7 @@ export function ProfilePage() {
   const serverUrl = window.location.origin;
   const [newLabel, setNewLabel] = useState('');
   const [platform, setPlatform] = useState<Platform>('mac');
+  const [snippetMode, setSnippetMode] = useState<SnippetMode>('install');
   const [newKey, setNewKey] = useState<NewKeyResponse | null>(null);
   const [revokeConfirm, setRevokeConfirm] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -118,15 +120,20 @@ export function ProfilePage() {
 
   const activeKeys = keys.filter((k) => !k.revokedAt);
 
+  const key = newKey?.key ?? 'chub_...';
+
   const installCmd: Record<Platform, string> = {
-    mac: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${newKey?.key ?? 'chub_...'} sh`,
-    linux: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${newKey?.key ?? 'chub_...'} sh`,
-    'linux-vm': `# SSH into your VM, then:\ncurl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${newKey?.key ?? 'chub_...'} sh`,
-    // Smart installer: works in regular OR admin PowerShell.
-    //   Admin → registers a Windows Service (boot-start)
-    //   Standard user → registers a hidden Scheduled Task (logon-start, no console window)
-    windows: `# Paste into PowerShell (admin not required — auto-detects):
-$env:CHUB_API_KEY='${newKey?.key ?? 'chub_...'}'; iwr ${serverUrl}/install.ps1 -OutFile "$env:TEMP\\install-chub.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\install-chub.ps1"`,
+    mac: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${key} sh`,
+    linux: `curl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${key} sh`,
+    'linux-vm': `# SSH into your VM, then:\ncurl -sSL ${serverUrl}/install.sh | CHUB_API_KEY=${key} sh`,
+    windows: `# Paste into PowerShell (admin not required — auto-detects):\n$env:CHUB_API_KEY='${key}'; iwr ${serverUrl}/install.ps1 -OutFile "$env:TEMP\\install-chub.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\install-chub.ps1"`,
+  };
+
+  const migrateCmd: Record<Platform, string> = {
+    mac: `# Re-points your existing collector to this hub:\ncurl -sSL ${serverUrl}/migrate.sh | CHUB_API_KEY=${key} sh`,
+    linux: `# Re-points your existing collector to this hub:\ncurl -sSL ${serverUrl}/migrate.sh | CHUB_API_KEY=${key} sh`,
+    'linux-vm': `# SSH into your VM, then:\n# Re-points your existing collector to this hub:\ncurl -sSL ${serverUrl}/migrate.sh | CHUB_API_KEY=${key} sh`,
+    windows: `# Paste into PowerShell (admin not required — auto-detects):\n# Re-points your existing collector to this hub:\n$env:CHUB_API_KEY='${key}'; iwr ${serverUrl}/migrate.ps1 -OutFile "$env:TEMP\\migrate-chub.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\migrate-chub.ps1"`,
   };
 
   return (
@@ -260,11 +267,35 @@ $env:CHUB_API_KEY='${newKey?.key ?? 'chub_...'}'; iwr ${serverUrl}/install.ps1 -
         {newKey && (
           <div className="px-5 py-4 border-b border-line-2" style={{ background: 'color-mix(in oklch, var(--accent) 6%, transparent)' }}>
             <p className="text-xs font-semibold mb-1" style={{ color: 'var(--accent)' }}>Save this key — shown once</p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-3">
               <code className="mono text-xs flex-1 break-all">{newKey.key}</code>
               <CopyButton text={newKey.key} />
             </div>
-            <div className="flex gap-1 mt-3 mb-2">
+
+            {/* Install vs Migrate toggle */}
+            <div className="flex gap-1 mb-3">
+              {(['install', 'migrate'] as SnippetMode[]).map((m) => (
+                <button key={m} onClick={() => setSnippetMode(m)}
+                  className="px-2.5 py-1 text-[11px] font-medium rounded-pill border border-line cursor-pointer transition-colors"
+                  style={{
+                    background: snippetMode === m ? 'var(--accent)' : 'var(--surface)',
+                    color: snippetMode === m ? 'white' : 'var(--ink-2)',
+                    borderColor: snippetMode === m ? 'var(--accent)' : 'var(--line)',
+                    letterSpacing: '0.02em',
+                  }}>
+                  {m === 'install' ? 'Fresh install' : 'Migrate from another hub'}
+                </button>
+              ))}
+            </div>
+
+            {snippetMode === 'migrate' && (
+              <p className="text-[11.5px] text-ink-3 mb-2 leading-relaxed">
+                Already running a collector pointing at a different hub? This command re-points it here and restarts the daemon — no reinstall needed.
+              </p>
+            )}
+
+            {/* Platform tabs */}
+            <div className="flex gap-1 mb-2">
               {(['mac', 'linux', 'linux-vm', 'windows'] as Platform[]).map((p) => (
                 <button key={p} onClick={() => setPlatform(p)}
                   className="mono px-2 py-1 text-[10.5px] rounded-pill border border-line cursor-pointer"
@@ -277,8 +308,10 @@ $env:CHUB_API_KEY='${newKey?.key ?? 'chub_...'}'; iwr ${serverUrl}/install.ps1 -
                 </button>
               ))}
             </div>
-            <div className="relative rounded-btn bg-ink text-canvas p-3.5 mt-1">
-              <pre className="mono text-xs whitespace-pre-wrap break-all pr-14">{installCmd[platform]}</pre>
+            <div className="relative rounded-btn bg-ink text-canvas p-3.5">
+              <pre className="mono text-xs whitespace-pre-wrap break-all pr-14">
+                {snippetMode === 'install' ? installCmd[platform] : migrateCmd[platform]}
+              </pre>
             </div>
             <button onClick={() => setNewKey(null)} className="text-xs text-ink-3 hover:text-ink underline mt-2">Done — dismiss</button>
           </div>

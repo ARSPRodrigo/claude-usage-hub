@@ -7,6 +7,7 @@ const GITHUB_REPO = 'https://github.com/ARSPRodrigo/claude-usage-hub';
 const JUMP_TO: { label: string; id: string }[] = [
   { label: 'Quickstart', id: 'quickstart' },
   { label: 'Windows install', id: 'windows-install' },
+  { label: 'Switching hubs', id: 'switching-hubs' },
   { label: 'Roles & permissions', id: 'roles' },
   { label: 'Organizations & workspaces', id: 'orgs' },
   { label: 'Privacy', id: 'privacy' },
@@ -101,8 +102,60 @@ export function HelpPage() {
       ),
     },
     {
-      id: 'roles',
+      id: 'switching-hubs',
       label: 'H3',
+      title: 'Switching hubs',
+      body: (
+        <div className="text-[13.5px] text-ink-2 leading-relaxed space-y-3">
+          <p>
+            If your team is decommissioning another hub and consolidating here, each developer just
+            needs to re-point their existing collector — no reinstall or data loss on this hub.
+          </p>
+          <p className="font-medium text-ink">Steps per machine:</p>
+          <ol className="list-decimal list-inside space-y-2 ml-1">
+            <li>Go to <strong>Profile &amp; Keys</strong> on this hub and generate a new API key for the machine.</li>
+            <li>Click <strong>Migrate from another hub</strong> in the snippet toggle that appears after generating the key.</li>
+            <li>Select your OS and run the one-line command on the machine being migrated.</li>
+          </ol>
+          <p>
+            The migrate command detects the existing collector, runs <code className="mono text-xs bg-canvas-alt px-1 rounded">init</code> to
+            overwrite the server URL and API key, then restarts the daemon. The daemon is running again
+            within seconds — pointing at this hub.
+          </p>
+          <p className="font-medium text-ink">What the migrate command does per OS:</p>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-line-2">
+                <th className="label text-left py-2">OS</th>
+                <th className="label text-left py-2">Daemon backend</th>
+                <th className="label text-left py-2">How it restarts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ['macOS', 'launchd', 'launchctl unload → load'],
+                ['Linux', 'systemd user service', 'systemctl --user disable → enable'],
+                ['Windows (admin)', 'NSSM Windows Service', 'nssm stop → start (or sc if nssm absent)'],
+                ['Windows (standard user)', 'Hidden Scheduled Task', 'schtasks /delete → re-register'],
+              ].map(([os, backend, restart], i, arr) => (
+                <tr key={os} style={{ borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+                  <td className="py-2.5 font-medium whitespace-nowrap">{os}</td>
+                  <td className="py-2.5">{backend}</td>
+                  <td className="py-2.5 text-ink-3">{restart}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-ink-3">
+            If no existing collector is found on the machine, the migrate script falls back to a full
+            fresh install automatically — so the same command works for both migrating and new machines.
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'roles',
+      label: 'H4',
       title: 'Roles & permissions',
       body: (
         <div className="text-[13.5px] text-ink-2 leading-relaxed space-y-3">
@@ -145,7 +198,7 @@ export function HelpPage() {
     },
     {
       id: 'orgs',
-      label: 'H4',
+      label: 'H5',
       title: 'Organizations & workspaces',
       body: (
         <div className="text-[13.5px] text-ink-2 leading-relaxed space-y-3">
@@ -175,7 +228,7 @@ export function HelpPage() {
     },
     {
       id: 'privacy',
-      label: 'H5',
+      label: 'H6',
       title: 'Privacy',
       body: (
         <div className="text-[13.5px] text-ink-2 leading-relaxed">
@@ -202,6 +255,10 @@ export function HelpPage() {
     ['Can I delete a machine?', 'Revoke its API key on the Profile & Keys page. Historical entries are preserved unless you explicitly wipe them.'],
     ['What if I rotate keys?', 'Generate a new key, install it on the machine, revoke the old one. Historical entries stay tied to the machine alias, not the key.'],
     ['Is there an alerting system?', 'Not yet. Budget thresholds and Slack/email alerts are on the roadmap.'],
+    ['How do I migrate from another hub to this one?', 'Generate a new API key on this hub (Profile & Keys), then use the "Migrate from another hub" snippet. It re-points the existing collector daemon and restarts it — no reinstall needed. Works on macOS, Linux, and Windows (both admin and standard user).'],
+    ['Will historical data from the old hub carry over?', 'No — historical entries stay on the old hub. The collector only sends new data going forward. If you need a data export from the old hub, you can export the SQLite database directly from the server.'],
+    ['What happens to the old hub after migration?', 'Nothing automatically. You can leave it running (it will just stop receiving data once collectors are re-pointed) or shut it down and decommission the server. Revoke the old API keys from the old hub\'s admin panel to keep it clean.'],
+    ['Can I run the migrate command on a machine that was never connected to any hub?', 'Yes. If no existing collector is found, the migrate script automatically falls back to a full fresh install — so the same one-liner works for both new machines and machines being migrated.'],
   ];
 
   return (
@@ -243,7 +300,7 @@ export function HelpPage() {
           {/* FAQ */}
           <div id="faq" className="rounded-card border border-line bg-surface scroll-mt-16">
             <div className="px-5 py-4 border-b border-line-2">
-              <div className="label">H4 · FAQ</div>
+              <div className="label">H7 · FAQ</div>
               <div className="text-[17px] font-medium mt-1.5" style={{ letterSpacing: '-0.015em' }}>Common questions</div>
             </div>
             <div>
