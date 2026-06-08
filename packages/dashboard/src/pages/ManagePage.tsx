@@ -589,6 +589,7 @@ function OwnedSummary({ orgCount, wsCount }: { orgCount: number; wsCount: number
 function labelForRole(role: string): string {
   if (role === 'platform_owner' || role === 'primary_owner') return 'Owner';
   if (role === 'platform_admin' || role === 'owner') return 'Admin';
+  if (role === 'workspace_admin') return 'Workspace Admin';
   return 'Developer';
 }
 

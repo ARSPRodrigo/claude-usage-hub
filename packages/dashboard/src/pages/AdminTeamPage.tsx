@@ -339,7 +339,8 @@ export function AdminTeamPage() {
                 >
                   {m.role === 'platform_owner' || m.role === 'primary_owner' ? 'Owner' :
                    m.role === 'platform_admin' || m.role === 'owner' ? 'Admin' :
-                   m.role}
+                   m.role === 'workspace_admin' ? 'Workspace Admin' :
+                   'Developer'}
                 </span>
               </div>
             </div>
