@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.4-beta] - 2026-06-08
+
+### Added
+- **Hub migration scripts** — `/migrate.sh` (Mac/Linux) and `/migrate.ps1` (Windows) re-point an existing collector to a new hub and restart the daemon. Falls back to full install if no collector is found. Windows script auto-detects admin vs standard user (NSSM service or Scheduled Task).
+- **"Migrate from another hub" snippet** — Profile & Keys page now has an Install / Migrate toggle on the API key panel, with per-platform one-liner commands for migration.
+- **Help page: Switching hubs section** — step-by-step migration guide with per-OS daemon restart table and four new FAQ entries covering migration, historical data, old hub cleanup, and fallback for new machines.
+- **`scripts/deploy.sh`** — VM deploy helper that pulls latest code, downloads `collector.exe` from the latest GitHub release, and rebuilds the Docker image.
+
+### Fixed
+- `workspace_admin` role badge displayed raw string `WORKSPACE_ADMIN` (with underscore) instead of `WORKSPACE ADMIN` — fixed in team page and manage page label function.
+- `collector.exe` endpoint now returns 404 for 0-byte placeholder files so `install.ps1` / `migrate.ps1` correctly fall back to `collector.js + Node.js` instead of downloading a broken binary.
+
+---
+
 ## [1.0.0] - 2026-05-16
 
 ### Added — Multi-org & Workspaces

@@ -66,6 +66,9 @@ downloads.get('/download/collector.exe', (c) => {
     return c.json({ error: 'collector.exe not built yet' }, 404);
   }
   const { size } = statSync(exePath);
+  if (size === 0) {
+    return c.json({ error: 'collector.exe not built yet' }, 404);
+  }
   c.header('Content-Type', 'application/octet-stream');
   c.header('Content-Disposition', 'attachment; filename="collector.exe"');
   c.header('Content-Length', String(size));
