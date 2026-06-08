@@ -11,7 +11,10 @@ set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 GITHUB_REPO="ARSPRodrigo/claude-usage-hub"
-EXE_URL="https://github.com/$GITHUB_REPO/releases/latest/download/collector.exe"
+
+# Read version from package.json — avoids /releases/latest which skips pre-releases
+VERSION=$(grep '"version"' "$REPO_DIR/package.json" | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
+EXE_URL="https://github.com/$GITHUB_REPO/releases/download/v$VERSION/collector.exe"
 
 cd "$REPO_DIR"
 
