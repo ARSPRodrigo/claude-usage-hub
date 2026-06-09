@@ -103,9 +103,12 @@ export function createApp(mode: AppMode = 'local'): Hono<AppEnv> {
   const distPath = getDashboardDistPath();
   if (existsSync(distPath)) {
     // Content-hashed assets: long cache, immutable.
+    // Guard: only set immutable if serveStatic actually found the file (not HTML SPA fallback).
     app.use('/assets/*', async (c, next) => {
       await next();
-      c.header('Cache-Control', 'public, max-age=31536000, immutable');
+      if (!c.res.headers.get('content-type')?.startsWith('text/html')) {
+        c.header('Cache-Control', 'public, max-age=31536000, immutable');
+      }
     });
     app.use('/assets/*', serveStatic({ root: distPath }));
     app.use('/favicon*', serveStatic({ root: distPath }));
