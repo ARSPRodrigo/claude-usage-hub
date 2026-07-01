@@ -362,7 +362,14 @@ try {
     if ($head.StatusCode -eq 200) {
         Write-Host "Downloading collector.exe (self-contained, no Node.js required)..."
         Invoke-WebRequest -Uri $ExeUrl -OutFile $ExePath -UseBasicParsing
-        $UseExe = $true
+        # Verify it's a real Windows PE (starts with MZ magic bytes) and non-trivially large.
+        $bytes = [System.IO.File]::ReadAllBytes($ExePath)
+        if ($bytes.Length -gt 1048576 -and $bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) {
+            $UseExe = $true
+        } else {
+            Write-Host "collector.exe appears invalid for this platform — falling back to collector.js." -ForegroundColor Yellow
+            Remove-Item $ExePath -Force -ErrorAction SilentlyContinue
+        }
     }
 } catch {
     # 404 or network error - fall through to the Node.js path
