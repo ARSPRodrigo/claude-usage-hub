@@ -5,14 +5,16 @@ import { fetchServerConfig, useGoogleScript } from '@/lib/useGoogleSignIn';
 
 export function AcceptInvitePage() {
   const token = new URLSearchParams(window.location.search).get('token');
-  const googleLoaded = useGoogleScript();
+  const { loaded: googleLoaded, error: googleScriptError } = useGoogleScript();
   const buttonRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!token) { setError('Invalid invitation link — token is missing.'); return; }
+    if (googleScriptError) { setError(googleScriptError); return; }
     if (!googleLoaded || !buttonRef.current) return;
+    setError(null);
 
     fetchServerConfig().then((config) => {
       if (!config.googleClientId) {
