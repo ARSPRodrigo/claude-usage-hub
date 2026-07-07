@@ -22,7 +22,7 @@ export async function startServer(
   if (config.mode === 'team') {
     const authConfig = loadAuthConfig();
     setJwtSecret(authConfig.jwtSecret);
-    setGoogleConfig(authConfig.googleClientId, authConfig.allowedDomain);
+    setGoogleConfig(authConfig.googleClientId, authConfig.allowedDomains);
   }
 
   // Ensure DB directory exists

@@ -302,7 +302,7 @@ export async function acceptInvite(c: import('hono').Context<AppEnv>): Promise<R
   }
 
   // Verify Google ID token
-  let googleConfig: { clientId: string; allowedDomain: string };
+  let googleConfig: { clientId: string; allowedDomains: string[] };
   try {
     googleConfig = getGoogleConfig();
   } catch {
@@ -311,7 +311,7 @@ export async function acceptInvite(c: import('hono').Context<AppEnv>): Promise<R
 
   let googleUser: Awaited<ReturnType<typeof verifyGoogleToken>>;
   try {
-    googleUser = await verifyGoogleToken(body.idToken, googleConfig.clientId, googleConfig.allowedDomain);
+    googleUser = await verifyGoogleToken(body.idToken, googleConfig.clientId, googleConfig.allowedDomains);
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : 'Token verification failed' }, 401);
   }

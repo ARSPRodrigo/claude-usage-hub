@@ -30,7 +30,15 @@ export interface AuthConfig {
   adminEmail: string;
   adminPassword: string;
   googleClientId: string;
-  allowedDomain: string;
+  allowedDomains: string[];
+}
+
+/** Parse a comma-separated ALLOWED_DOMAIN env var into a clean list of domains. */
+export function parseAllowedDomains(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -47,6 +55,6 @@ export function loadAuthConfig(): AuthConfig {
     adminEmail: process.env['ADMIN_EMAIL'] ?? '',
     adminPassword: process.env['ADMIN_PASSWORD'] ?? '',
     googleClientId: process.env['GOOGLE_CLIENT_ID'] ?? '',
-    allowedDomain: process.env['ALLOWED_DOMAIN'] ?? '',
+    allowedDomains: parseAllowedDomains(process.env['ALLOWED_DOMAIN']),
   };
 }

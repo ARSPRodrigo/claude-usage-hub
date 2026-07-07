@@ -70,7 +70,7 @@ auth.post('/google/verify', async (c) => {
     return c.json({ error: 'idToken is required' }, 400);
   }
 
-  let googleConfig: { clientId: string; allowedDomain: string };
+  let googleConfig: { clientId: string; allowedDomains: string[] };
   try {
     googleConfig = getGoogleConfig();
   } catch {
@@ -79,7 +79,7 @@ auth.post('/google/verify', async (c) => {
 
   let googleUser: Awaited<ReturnType<typeof verifyGoogleToken>>;
   try {
-    googleUser = await verifyGoogleToken(body.idToken, googleConfig.clientId, googleConfig.allowedDomain);
+    googleUser = await verifyGoogleToken(body.idToken, googleConfig.clientId, googleConfig.allowedDomains);
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : 'Token verification failed' }, 401);
   }

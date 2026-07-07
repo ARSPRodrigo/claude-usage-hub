@@ -51,12 +51,12 @@ function decodeJwtPart(part: string): Record<string, unknown> {
  *
  * @param idToken  - Raw Google ID token from frontend
  * @param clientId - Your Google OAuth client ID (must match token audience)
- * @param allowedDomain - Restrict to this Google Workspace domain (e.g. "codegen.net")
+ * @param allowedDomains - Restrict to these Google Workspace domains (e.g. ["codegen.net", "therisevillage.com"])
  */
 export async function verifyGoogleToken(
   idToken: string,
   clientId: string,
-  allowedDomain: string,
+  allowedDomains: string[],
 ): Promise<GoogleTokenPayload> {
   const parts = idToken.split('.');
   if (parts.length !== 3) throw new Error('Invalid ID token format');
@@ -90,14 +90,16 @@ export async function verifyGoogleToken(
     throw new Error('Token has expired');
   }
 
+  const domainList = allowedDomains.map((d) => `@${d}`).join(', ');
+
   // Validate hosted domain
-  if (payload.hd !== allowedDomain) {
-    throw new Error(`Access restricted to @${allowedDomain} Google Workspace accounts`);
+  if (!payload.hd || !allowedDomains.includes(payload.hd)) {
+    throw new Error(`Access restricted to ${domainList} Google Workspace accounts`);
   }
 
   // Double-check email domain
-  if (!payload.email?.endsWith(`@${allowedDomain}`)) {
-    throw new Error(`Access restricted to @${allowedDomain} accounts`);
+  if (!payload.email || !allowedDomains.some((d) => payload.email.endsWith(`@${d}`))) {
+    throw new Error(`Access restricted to ${domainList} accounts`);
   }
 
   if (!payload.email_verified) {
