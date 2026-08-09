@@ -203,14 +203,14 @@ downloads.get('/migrate.ps1', (c) => {
   const script = `# No param() / #Requires here on purpose: both are only legal as the first
 # statement of a *script file*, so they raise CommandNotFoundException when the
 # script is piped through Invoke-Expression (irm | iex). Read the env var
-# directly instead — that works identically for irm|iex and -File invocation.
+# directly instead - that works identically for irm|iex and -File invocation.
 $ApiKey = $env:CHUB_API_KEY
 
 $ErrorActionPreference = 'Stop'
 
-# Works in Admin or Standard user PowerShell — same as the installer.
-#   Admin    → re-registers as a Windows Service (NSSM)
-#   Standard → re-registers as a hidden Scheduled Task
+# Works in Admin or Standard user PowerShell - same as the installer.
+#   Admin    -> re-registers as a Windows Service (NSSM)
+#   Standard -> re-registers as a hidden Scheduled Task
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 $ServerUrl = "${origin}"
@@ -274,9 +274,9 @@ if (-not $CollectorFound) {
 }
 
 if ($IsAdmin) {
-    Write-Host "Administrator detected — will register as a Windows Service." -ForegroundColor Cyan
+    Write-Host "Administrator detected - will register as a Windows Service." -ForegroundColor Cyan
 } else {
-    Write-Host "Standard user detected — will register as a hidden Scheduled Task." -ForegroundColor Cyan
+    Write-Host "Standard user detected - will register as a hidden Scheduled Task." -ForegroundColor Cyan
 }
 
 Write-Host "Re-pointing collector to $ServerUrl ..."
@@ -286,7 +286,7 @@ Write-Host "Restarting daemon..."
 Invoke-Collector uninstall 2>$null
 Invoke-Collector install
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Daemon restart failed (exit $LASTEXITCODE). Config was updated — restart manually:" -ForegroundColor Red
+    Write-Host "Daemon restart failed (exit $LASTEXITCODE). Config was updated - restart manually:" -ForegroundColor Red
     if (Test-Path $ExePath) { Write-Host "  \`"$ExePath\`" install" }
     else                    { Write-Host "  node \`"$JsPath\`" install" }
     exit 1
@@ -306,8 +306,9 @@ if (Test-Path $ExePath) {
 }
 Write-Host "View logs:      Get-Content \`"$LogDir\\collector.log\`" -Wait"
 `;
+  // No BOM - see the note on install.ps1 below; it breaks `irm <url> | iex`.
   c.header('Content-Type', 'text/plain; charset=utf-8');
-  return c.body('﻿' + script);
+  return c.body(script);
 });
 
 /** GET /install.ps1 — Windows PowerShell install script */
@@ -317,7 +318,7 @@ downloads.get('/install.ps1', (c) => {
   const script = `# No param() / #Requires here on purpose: both are only legal as the first
 # statement of a *script file*, so they raise CommandNotFoundException when the
 # script is piped through Invoke-Expression (irm | iex). Read the env var
-# directly instead — that works identically for irm|iex and -File invocation.
+# directly instead - that works identically for irm|iex and -File invocation.
 $ApiKey = $env:CHUB_API_KEY
 
 $ErrorActionPreference = 'Stop'
@@ -373,7 +374,7 @@ try {
         if ($bytes.Length -gt 1048576 -and $bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) {
             $UseExe = $true
         } else {
-            Write-Host "collector.exe appears invalid for this platform — falling back to collector.js." -ForegroundColor Yellow
+            Write-Host "collector.exe appears invalid for this platform - falling back to collector.js." -ForegroundColor Yellow
             Remove-Item $ExePath -Force -ErrorAction SilentlyContinue
         }
     }
@@ -416,7 +417,7 @@ if ($IsAdmin) {
     Write-Host "Installing Scheduled Task (user context, no admin needed)..."
 }
 
-# Run install and capture exit code — \$LASTEXITCODE reflects the native binary's status.
+# Run install and capture exit code - \$LASTEXITCODE reflects the native binary's status.
 Invoke-Collector install
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
@@ -450,11 +451,13 @@ if ($UseExe) {
 }
 Write-Host "View logs:             Get-Content \`"$LogDir\\collector.log\`" -Wait"
 `;
-  // Prepend UTF-8 BOM so Windows PowerShell 5.1 reads the file as UTF-8
-  // rather than the system default code page (usually CP1252). Without
-  // this, any non-ASCII byte in the script breaks the parser.
+  // No BOM: a leading U+FEFF stops '#' from being the first character of line
+  // 1, so PowerShell parses the header comment as code and `irm <url> | iex`
+  // dies before anything runs. The BOM previously guarded non-ASCII bytes from
+  // being decoded as CP1252 by PowerShell 5.1 under -File; the script is now
+  // pure ASCII, so both invocation styles are safe without it.
   c.header('Content-Type', 'text/plain; charset=utf-8');
-  return c.body('﻿' + script);
+  return c.body(script);
 });
 
 export { downloads as downloadRoutes };
