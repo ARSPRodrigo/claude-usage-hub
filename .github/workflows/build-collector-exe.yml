@@ -71,3 +71,6 @@ jobs:
         with:
           files: packages/collector/dist/collector.exe
           prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          # Release body comes from RELEASE_NOTES.md, refreshed per release.
+          # Without this the release publishes with an empty description.
+          body_path: RELEASE_NOTES.md
