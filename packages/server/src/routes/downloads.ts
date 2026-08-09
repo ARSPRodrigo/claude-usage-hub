@@ -204,6 +204,8 @@ downloads.get('/migrate.ps1', (c) => {
 param([string]$ApiKey = $env:CHUB_API_KEY)
 
 $ErrorActionPreference = 'Stop'
+# param() is skipped when run via irm|iex — fall back to env var in that case.
+if (-not $ApiKey) { $ApiKey = $env:CHUB_API_KEY }
 
 # Works in Admin or Standard user PowerShell — same as the installer.
 #   Admin    → re-registers as a Windows Service (NSSM)
@@ -315,6 +317,8 @@ downloads.get('/install.ps1', (c) => {
 param([string]$ApiKey = $env:CHUB_API_KEY)
 
 $ErrorActionPreference = 'Stop'
+# param() is skipped when run via irm|iex — fall back to env var in that case.
+if (-not $ApiKey) { $ApiKey = $env:CHUB_API_KEY }
 
 # Smart installer:
 #   - If running as Administrator: registers a Windows Service via NSSM
