@@ -330,12 +330,9 @@ export function ProfilePage() {
               <tr key={k.id} style={{ borderBottom: i === activeKeys.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
                 <td className="px-4 py-3.5 font-medium">{k.label}</td>
                 <td className="px-4 py-3.5">
-                  <div className="flex items-center gap-2">
-                    <code className="mono text-xs bg-canvas-alt px-2 py-0.5 rounded-pill border border-line">
-                      {k.keyPrefix}…
-                    </code>
-                    <CopyButton text={k.keyPrefix} />
-                  </div>
+                  <code className="mono text-xs bg-canvas-alt px-2 py-0.5 rounded-pill border border-line">
+                    {k.keyPrefix}…
+                  </code>
                 </td>
                 <td className="px-4 py-3.5 mono text-ink-2">{k.label}</td>
                 <td className="px-4 py-3.5 text-ink-3 text-xs">{formatRelative(k.createdAt)}</td>
