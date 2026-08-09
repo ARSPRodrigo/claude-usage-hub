@@ -16,6 +16,15 @@ const OUTBOX_DIR = () => {
 /** Retry delays in ms: 1s, 4s, 16s. */
 const RETRY_DELAYS = [1000, 4000, 16000];
 
+/**
+ * 4xx statuses worth keeping for a later retry: an unauthorized or forbidden
+ * key becomes valid once the user re-runs init with the right one, and a
+ * rate-limit clears on its own. Other 4xx (malformed body, payload too large)
+ * would fail identically forever, so those are dropped rather than filling
+ * the outbox with poison.
+ */
+const RECOVERABLE_STATUSES = new Set([401, 403, 408, 429]);
+
 /** Maximum entries per batch to stay well under the 10 MB body limit. */
 const BATCH_SIZE = 2000;
 
@@ -43,9 +52,15 @@ async function uploadBatch(
 
       if (response.ok) return true;
 
-      // Don't retry on client errors (4xx)
+      // Don't retry client errors (4xx) in-loop — they won't succeed on a
+      // retry. But auth and rate-limit failures become valid once the user
+      // fixes their key or the window resets, so park the payload in the
+      // outbox instead of dropping it. collectOnce() has already advanced
+      // the cursors and seen-hashes, so anything not queued here is lost
+      // permanently.
       if (response.status >= 400 && response.status < 500) {
         console.error(`Upload rejected (${response.status}): ${await response.text()}`);
+        if (RECOVERABLE_STATUSES.has(response.status)) saveToOutbox(payload);
         return false;
       }
     } catch (err) {
