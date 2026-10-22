@@ -1,6 +1,6 @@
 {
   "name": "@claude-usage-hub/shared",
-  "version": "0.4.5-beta",
+  "version": "0.5.0-beta",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

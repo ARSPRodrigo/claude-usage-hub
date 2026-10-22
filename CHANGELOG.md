@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0-beta] - 2026-10-22
+
+> **On first start after upgrading, the server re-prices every stored usage entry in the background.** Reported costs change, in some cases substantially. The server keeps serving requests while it runs and resumes after a restart.
+
+### Fixed
+- **Costs for every Claude model released after Opus 4.7 / Sonnet 4.6 were wrong** — the price table stopped at Opus 4.7, Sonnet 4.6 and Haiku 4.5, and anything newer (Opus 4.8, 5, 5.5; Sonnet 5, 5.5; Fable 5, 5.1; Haiku 5.5) was priced at Sonnet 4.6 rates. Opus and Fable usage was under-reported and Sonnet 5.x over-reported.
+- **Cache pricing used fixed multipliers** — newer models price cache reads at 0.05× (Opus 5.5, Sonnet 5.5) or 0.025× (Fable 5.1) of input rather than 0.1×. Rates are now listed per model, including 5-minute vs 1-hour cache writes.
+- **Haiku 5.5 long-context pricing** — prompts over 100K tokens are billed at the higher tier.
+- **Non-Claude models** routed through Claude Code were priced at Sonnet rates; they are now counted at $0.
+- **Fable / Mythos usage was missing from Cost Comparison** — it now counts in the flagship tier with Opus.
+- **Invites could place a user in another organization's workspace** — an invite naming an org but no workspace fell back to the platform default workspace. Every invite now requires both (Platform Admin invites included, reversing 0.4.5's change), and accepting an invite never falls back.
+
+### Changed
+- **The server prices usage, not the collector** — every entry is costed from its token counts on ingest, so collectors that predate a price change can no longer record stale prices and need no reinstall.
+- **Unknown models are priced automatically** — an unlisted Claude model takes the price of the nearest listed version in its family (a future Opus is priced like the newest Opus); an unknown family is priced like the newest Opus. Such costs are marked *estimated*, and platform admins see a banner until a release adds the official price.
+- **Sign-up requires an invite or a domain rule** — Google sign-in no longer creates an account for any allowed-domain address; existing accounts must belong to a workspace to sign in (the platform owner is exempt).
+- **Model names include the version** — "Opus 5.5", "Fable 5.1", "Haiku 4.5", derived from the model id so future versions display correctly. Fable has its own colour; charts still group by family.
+- **Workspace switcher** selects an org's default workspace when you switch org, pins it to the top, sorts case-insensitively, and scrolls instead of growing past the screen.
+
+### Added
+- **Manage → Models** — every model seen in usage data, the price applied, and whether it is listed, estimated or not priced.
+- **Pagination** on every list table (25 rows per page).
+- **Members page: workspace filter**, and workspace names instead of ids (also in the Grants dialog).
+- **Collector reports the 5-minute / 1-hour cache-write split**, stored and billed at the matching rates.
+
+### Updating prices
+Edit `CLAUDE_PRICING` in `packages/shared/src/pricing.ts` from the [official pricing page](https://platform.claude.com/docs/en/about-claude/pricing) and bump `PRICING_VERSION`. Stored entries are re-priced on the next server start.
+
+---
+
 ## [0.4.5-beta] - 2026-08-09
 
 > **Action required:** collectors installed before this release must be reinstalled to pick up the data-loss fix below. Existing installs keep running, but will continue to discard usage permanently if their API key ever stops working.
