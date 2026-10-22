@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.1-beta] - 2026-10-22
+
+> **First start builds two database indexes.** On a database with over a million usage entries this takes about a minute, during which the hub is not yet serving. Hubs that already have them (see *Fixed*) skip the step.
+
+### Fixed
+- **Dashboards, the leaderboard and per-person totals took 12–15 seconds on large databases and froze the whole server while they ran** — queries scoped to an organization or a person had no suitable index, so SQLite read most of the table; because the database driver is synchronous, every other request waited. Added `(developer_id, timestamp)` and `(organization_id, timestamp)` indexes: a 7-day organization view dropped from 12–16 s to under 0.1 s and a person's all-time total from 12–15 s to about 10 ms. The "All" time range on the leaderboard still sums every row and remains slow on very large databases.
+- **Manage → Models, and the estimated-cost banner on the Overview page, scanned the entire usage table** (about 12 s, blocking the server) — introduced in 0.5.0. Models are now listed instantly and entries, cost and last-seen cover the last 30 days.
+
+### Added
+- **Org and workspace badge for people who can't switch scope** — developers and workspace admins see a read-only "Organization / Workspace" label in the top bar. Their leaderboard was already limited to their workspace without saying so.
+- **Members page: the workspace filter is always selectable** — with no organization chosen it lists every workspace as "Organization · Workspace", and picking one sets the organization filter to match.
+
+---
+
 ## [0.5.0-beta] - 2026-10-22
 
 > **On first start after upgrading, the server re-prices every stored usage entry in the background.** Reported costs change, in some cases substantially. The server keeps serving requests while it runs and resumes after a restart.
