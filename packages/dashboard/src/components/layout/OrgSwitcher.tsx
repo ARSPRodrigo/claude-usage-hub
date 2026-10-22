@@ -35,12 +35,12 @@ export function OrgSwitcher() {
   const { data: orgs = [] } = useOrgList();
   const { data: workspaces = [] } = useWorkspaceList(scope.orgId ?? null);
 
-  // workspace_admin is locked to their single workspace — no switcher needed.
-  if (isWsAdmin) return null;
-  // Hide entirely for plain developers. Platform admins always see it; org
-  // owners see it once they have at least one accessible org.
-  if (!isPlatform && !isOrgOwner) return null;
-  if (!isPlatform && orgs.length === 0) return null;
+  // workspace_admin is locked to their single workspace — no switcher, but show where they are.
+  if (isWsAdmin) return <ScopeBadge />;
+  // Plain developers can't switch scope; show which org/workspace their data belongs to.
+  // Platform admins always get the switcher; org owners once they have an accessible org.
+  if (!isPlatform && !isOrgOwner) return <ScopeBadge />;
+  if (!isPlatform && orgs.length === 0) return <ScopeBadge />;
 
   // Switching org lands on that org's default workspace when it has one.
   const pickOrg = async (id: string | null) => {
@@ -85,6 +85,36 @@ export function OrgSwitcher() {
         activeId={scope.workspaceId}
         disabled={!scope.orgId}
       />
+    </div>
+  );
+}
+
+/**
+ * Read-only "Acme / Platform" label for people who can't switch scope. The
+ * dashboard endpoints already restrict these users to their own org and
+ * workspace, so the first workspace returned is theirs.
+ */
+function ScopeBadge() {
+  const { data: orgs = [] } = useOrgList();
+  const { data: workspaces = [] } = useWorkspaceList(null);
+  const ws = workspaces[0];
+  if (!ws) return null;
+  const org = orgs.find((o) => o.id === ws.orgId);
+
+  return (
+    <div
+      className="inline-flex items-center gap-2 px-2.5 py-[6px] border border-line bg-surface rounded-btn text-[12px] font-medium text-ink"
+      title="Your organization and workspace"
+    >
+      {org && (
+        <>
+          <Building2 className="h-3.5 w-3.5 text-ink-3" />
+          <span className="truncate max-w-[140px]">{org.name}</span>
+          <span className="text-ink-4">/</span>
+        </>
+      )}
+      <Layers className="h-3.5 w-3.5 text-ink-3" />
+      <span className="truncate max-w-[140px]">{ws.name}</span>
     </div>
   );
 }

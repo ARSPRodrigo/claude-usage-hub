@@ -220,6 +220,12 @@ export function runMigrations(raw: Database.Database, mode?: AppMode): void {
     // Column already exists — safe to ignore
   }
 
+  // Composite indexes for the dashboard's scoped, time-bounded aggregates. Without
+  // them SQLite either scans every row (per-developer totals) or picks the org-only
+  // index for a 7-day window and walks a whole organization's history.
+  raw.exec(`CREATE INDEX IF NOT EXISTS idx_entries_dev_ts ON usage_entries(developer_id, timestamp)`);
+  raw.exec(`CREATE INDEX IF NOT EXISTS idx_entries_org_ts ON usage_entries(organization_id, timestamp)`);
+
   // Cache-write TTL split (5m vs 1h), reported by newer collectors. NULL = unknown.
   try {
     raw.exec(`ALTER TABLE usage_entries ADD COLUMN cache_write_5m_tokens INTEGER`);

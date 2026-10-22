@@ -320,9 +320,12 @@ export interface ModelPricingStatus {
   model: string;
   displayName: string;
   family: string;
+  /** Last 30 days. */
   entryCount: number;
+  /** Last 30 days. */
   costUsd: number;
-  lastSeen: string;
+  /** Null when there was no usage in the last 30 days. */
+  lastSeen: string | null;
   /** exact: listed price · estimated: priced from the nearest listed model · unpriced: not a Claude model ($0) */
   source: 'exact' | 'estimated' | 'unpriced';
   basedOn: string | null;

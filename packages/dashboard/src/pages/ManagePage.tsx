@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
+import { useQueryClient, useMutation, useQuery, useQueries } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, ArrowRight, Search, Shield, X } from 'lucide-react';
 import { apiGet, apiPost, apiDelete, getUser, isPlatformOwner, isPlatformAdmin } from '@/api/client';
 import {
@@ -403,18 +403,44 @@ function MembersTab() {
   useEffect(() => {
     setOrgFilter(scope.orgId ?? 'all');
   }, [scope.orgId]);
-  // Workspace filter only applies once a real org is picked.
   const [wsFilter, setWsFilter] = useState<'all' | string>(scope.workspaceId ?? 'all');
   useEffect(() => {
     setWsFilter(scope.workspaceId ?? 'all');
   }, [scope.workspaceId]);
   const filterOrgId = orgFilter !== 'all' && orgFilter !== 'unassigned' ? orgFilter : null;
-  const { data: orgWorkspaces = [], isSuccess: orgWorkspacesLoaded } = useAdminWorkspaceList(filterOrgId);
-  // Drop a workspace pick that doesn't belong to the newly chosen org.
+
+  // Every workspace across the organizations (same cache keys as useAdminWorkspaceList).
+  const workspaceQueries = useQueries({
+    queries: orgs.map((o) => ({
+      queryKey: ['admin-workspaces', o.id],
+      queryFn: () => apiGet<WorkspaceRow[]>(`/api/v1/admin/organizations/${o.id}/workspaces`),
+      staleTime: 30_000,
+    })),
+  });
+  const workspacesLoaded = workspaceQueries.every((q) => q.isSuccess);
+  const allWorkspaces = useMemo(
+    () => orgs.flatMap((o, i) => (workspaceQueries[i]?.data ?? []).map((w) => ({ ...w, orgName: o.name }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [orgs, workspaceQueries.map((q) => q.dataUpdatedAt).join(',')],
+  );
+  const workspaceOptions = useMemo(() => {
+    const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    return filterOrgId
+      ? allWorkspaces.filter((w) => w.orgId === filterOrgId).sort(byName)
+      : [...allWorkspaces].sort((a, b) => a.orgName.localeCompare(b.orgName, undefined, { sensitivity: 'base' }) || byName(a, b));
+  }, [allWorkspaces, filterOrgId]);
+
+  // A workspace pick implies its organization; changing the org drops a workspace from another one.
+  const pickWorkspace = (id: string) => {
+    setWsFilter(id);
+    const ws = allWorkspaces.find((w) => w.id === id);
+    if (ws) setOrgFilter(ws.orgId);
+  };
   useEffect(() => {
-    if (!orgWorkspacesLoaded || wsFilter === 'all') return;
-    if (!orgWorkspaces.some((w) => w.id === wsFilter)) setWsFilter('all');
-  }, [orgWorkspaces, orgWorkspacesLoaded, wsFilter]);
+    if (!workspacesLoaded || wsFilter === 'all') return;
+    const ws = allWorkspaces.find((w) => w.id === wsFilter);
+    if (!ws || (filterOrgId && ws.orgId !== filterOrgId) || orgFilter === 'unassigned') setWsFilter('all');
+  }, [allWorkspaces, workspacesLoaded, wsFilter, filterOrgId, orgFilter]);
   const [movingMember, setMovingMember] = useState<MemberRow | null>(null);
   const [grantingMember, setGrantingMember] = useState<MemberRow | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -427,14 +453,14 @@ function MembersTab() {
       } else if (orgFilter !== 'all') {
         if ((m.currentOrgId ?? '') !== orgFilter) return false;
       }
-      if (filterOrgId && wsFilter !== 'all' && m.currentWorkspaceId !== wsFilter) return false;
+      if (wsFilter !== 'all' && m.currentWorkspaceId !== wsFilter) return false;
       if (!q) return true;
       return (
         m.email.toLowerCase().includes(q) ||
         m.displayName.toLowerCase().includes(q)
       );
     });
-  }, [members, query, orgFilter, filterOrgId, wsFilter]);
+  }, [members, query, orgFilter, wsFilter]);
 
   const pager = usePagination(filtered, `${query}|${orgFilter}|${wsFilter}`);
 
@@ -484,17 +510,14 @@ function MembersTab() {
         </select>
         <select
           value={wsFilter}
-          onChange={(e) => setWsFilter(e.target.value)}
-          disabled={!filterOrgId}
-          className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink disabled:opacity-50"
-          title={filterOrgId ? 'Workspace' : 'Pick an organization to filter by workspace'}
+          onChange={(e) => (e.target.value === 'all' ? setWsFilter('all') : pickWorkspace(e.target.value))}
+          className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+          title="Workspace"
         >
           <option value="all">All workspaces</option>
-          {[...orgWorkspaces]
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-            .map((w) => (
-              <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
+          {workspaceOptions.map((w) => (
+            <option key={w.id} value={w.id}>{filterOrgId ? w.name : `${w.orgName} · ${w.name}`}</option>
+          ))}
         </select>
         <span className="text-ink-3 text-xs ml-auto">{filtered.length} of {members.length} member{members.length === 1 ? '' : 's'}</span>
         {showTransferButton && (
@@ -1320,7 +1343,7 @@ function ModelsTab() {
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-line">
-                  {['Model', 'Pricing', 'Input', 'Output', 'Cache write 5m / 1h', 'Cache read', 'Entries', 'Cost', 'Last seen'].map((h, i) => (
+                  {['Model', 'Pricing', 'Input', 'Output', 'Cache write 5m / 1h', 'Cache read', 'Entries · 30d', 'Cost · 30d', 'Last seen'].map((h, i) => (
                     <th key={h} className="label py-2.5 px-4 whitespace-nowrap" style={{ textAlign: i >= 2 && i <= 7 ? 'right' : 'left' }}>{h}</th>
                   ))}
                 </tr>
@@ -1350,7 +1373,7 @@ function ModelsTab() {
                       <td className="px-4 py-3 mono text-right">{perMTok(m.cacheReadPerMillion)}</td>
                       <td className="px-4 py-3 mono text-right">{formatTokens(m.entryCount)}</td>
                       <td className="px-4 py-3 mono text-right">{formatCost(m.costUsd)}</td>
-                      <td className="px-4 py-3 text-ink-3 text-xs whitespace-nowrap">{formatRelative(m.lastSeen)}</td>
+                      <td className="px-4 py-3 text-ink-3 text-xs whitespace-nowrap">{m.lastSeen ? formatRelative(m.lastSeen) : 'over 30d ago'}</td>
                     </tr>
                   );
                 })}

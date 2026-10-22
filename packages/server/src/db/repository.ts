@@ -788,9 +788,11 @@ export interface ModelPricingStatus {
   model: string;
   displayName: string;
   family: string;
+  /** Entries / cost / last activity over the last 30 days (a full-history scan is too slow to run on request). */
   entryCount: number;
   costUsd: number;
-  lastSeen: string;
+  /** Null when the model has had no usage in the last 30 days. */
+  lastSeen: string | null;
   source: PricingSource;
   /** Listed model whose prices were applied (differs from `model` when estimated). */
   basedOn: string | null;
@@ -801,13 +803,27 @@ export interface ModelPricingStatus {
   cacheReadPerMillion: number;
 }
 
-/** Every model seen in usage data with the price applied to it. */
+/**
+ * Every model ever seen in usage data with the price applied to it.
+ *
+ * Listing distinct models is instant, but grouping the whole table is a
+ * full scan (~15 s on 1.6M rows, and it blocks the server), so activity
+ * figures cover the last 30 days only and use the timestamp index.
+ */
 export function getModelPricingStatus(): { pricingVersion: string; models: ModelPricingStatus[] } {
   const raw = getRawDb();
-  const rows = raw.prepare(`
-    SELECT model, COUNT(*) AS n, COALESCE(SUM(cost_usd), 0) AS cost, MAX(timestamp) AS last
-    FROM usage_entries GROUP BY model ORDER BY cost DESC
-  `).all() as Array<{ model: string; n: number; cost: number; last: string }>;
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const recent = new Map(
+    (raw.prepare(`
+      SELECT model, COUNT(*) AS n, COALESCE(SUM(cost_usd), 0) AS cost, MAX(timestamp) AS last
+      FROM usage_entries INDEXED BY idx_timestamp
+      WHERE timestamp >= ? GROUP BY model
+    `).all(cutoff) as Array<{ model: string; n: number; cost: number; last: string }>).map((r) => [r.model, r]),
+  );
+  const names = (raw.prepare(`SELECT DISTINCT model FROM usage_entries`).all() as Array<{ model: string }>).map((r) => r.model);
+  const rows = names
+    .map((model) => ({ model, n: recent.get(model)?.n ?? 0, cost: recent.get(model)?.cost ?? 0, last: recent.get(model)?.last ?? null }))
+    .sort((a, b) => b.cost - a.cost || a.model.localeCompare(b.model));
   return {
     pricingVersion: PRICING_VERSION,
     models: rows.map((r) => {
