@@ -1,4 +1,5 @@
-import { TIME_RANGE_HOURS } from '@claude-usage-hub/shared';
+import { TIME_RANGE_HOURS, calculateCost, resolvePricing, modelDisplayName, modelFamilyName, PRICING_VERSION } from '@claude-usage-hub/shared';
+import type { PricingSource } from '@claude-usage-hub/shared';
 import type {
   DashboardStats,
   TimeseriesPoint,
@@ -100,9 +101,9 @@ export function insertEntries(entries: EnrichedEntry[], apiKeyId?: string): numb
       (session_id, message_id, request_id, timestamp, model,
        input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
        service_tier, developer_id, project_alias, cost_usd, api_key_id,
-       organization_id, workspace_id)
+       organization_id, workspace_id, cache_write_5m_tokens, cache_write_1h_tokens)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   // Cache per-developer active memberships for the duration of this batch —
@@ -151,10 +152,13 @@ export function insertEntries(entries: EnrichedEntry[], apiKeyId?: string): numb
         e.serviceTier,
         e.developerId,
         e.projectAlias,
-        e.costUsd,
+        // Priced here, not by the collector, so old collectors can't record stale prices.
+        calculateCost(e.usage, e.model),
         apiKeyId ?? null,
         resolveOrg(e.developerId),
         resolveWs(e.developerId),
+        e.usage.cacheWrite5mTokens ?? null,
+        e.usage.cacheWrite1hTokens ?? null,
       );
       inserted += result.changes;
     }
@@ -653,7 +657,8 @@ export function getAggregateTokensByTier(
   }
 
   return {
-    opus: queryTier('model LIKE ?', ['%opus%']),
+    // Flagship tier: Opus plus the Fable / Mythos tier above it.
+    opus: queryTier('model LIKE ? OR model LIKE ? OR model LIKE ?', ['%opus%', '%fable%', '%mythos%']),
     sonnet: queryTier('model LIKE ? OR model LIKE ?', ['%sonnet%', '%haiku%']),
   };
 }
@@ -777,4 +782,51 @@ export function getDeveloperStats(
     GROUP BY u.id
     ORDER BY costUsd DESC
   `).all(...params) as DeveloperStatRow[];
+}
+
+export interface ModelPricingStatus {
+  model: string;
+  displayName: string;
+  family: string;
+  entryCount: number;
+  costUsd: number;
+  lastSeen: string;
+  source: PricingSource;
+  /** Listed model whose prices were applied (differs from `model` when estimated). */
+  basedOn: string | null;
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cacheWritePerMillion: number;
+  cacheWrite5mPerMillion: number | null;
+  cacheReadPerMillion: number;
+}
+
+/** Every model seen in usage data with the price applied to it. */
+export function getModelPricingStatus(): { pricingVersion: string; models: ModelPricingStatus[] } {
+  const raw = getRawDb();
+  const rows = raw.prepare(`
+    SELECT model, COUNT(*) AS n, COALESCE(SUM(cost_usd), 0) AS cost, MAX(timestamp) AS last
+    FROM usage_entries GROUP BY model ORDER BY cost DESC
+  `).all() as Array<{ model: string; n: number; cost: number; last: string }>;
+  return {
+    pricingVersion: PRICING_VERSION,
+    models: rows.map((r) => {
+      const { pricing, source, basedOn } = resolvePricing(r.model);
+      return {
+        model: r.model,
+        displayName: modelDisplayName(r.model),
+        family: modelFamilyName(r.model),
+        entryCount: r.n,
+        costUsd: r.cost,
+        lastSeen: r.last,
+        source,
+        basedOn,
+        inputPerMillion: pricing.inputPerMillion,
+        outputPerMillion: pricing.outputPerMillion,
+        cacheWritePerMillion: pricing.cacheWritePerMillion,
+        cacheWrite5mPerMillion: pricing.cacheWrite5mPerMillion ?? null,
+        cacheReadPerMillion: pricing.cacheReadPerMillion,
+      };
+    }),
+  };
 }

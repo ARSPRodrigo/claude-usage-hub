@@ -86,6 +86,10 @@ invitations.post('/', async (c) => {
     // Auto-fill orgId from workspace so the invitee lands in the right org.
     if (!orgId) orgId = ws.orgId;
   }
+  // Every invite must place the invitee: no org/workspace, no account.
+  if (!orgId || !workspaceId) {
+    return c.json({ error: 'An invitation must specify an organization and a workspace' }, 400);
+  }
 
   // Scope check:
   //   - workspace_admin: must specify a workspace they own; cannot invite platform_admin.
@@ -177,6 +181,7 @@ invitations.post('/bulk', async (c) => {
       if (orgId && ws.orgId !== orgId) return { email, error: 'Workspace does not belong to the chosen organization' };
       if (!orgId) orgId = ws.orgId;
     }
+    if (!orgId || !workspaceId) return { email, error: 'An invitation must specify an organization and a workspace' };
 
     // Scope check (same rules as the single-invite endpoint).
     if (auth.role === 'workspace_admin') {
@@ -300,6 +305,14 @@ export async function acceptInvite(c: import('hono').Context<AppEnv>): Promise<R
   if (new Date(invitation.expires_at) < new Date()) {
     return c.json({ error: 'This invitation has expired' }, 400);
   }
+  // Older invites could omit the target; never fall back to another org's
+  // workspace — the admin must issue a new invite.
+  const targetOrgId = invitation.org_id;
+  const targetWorkspaceId = invitation.workspace_id;
+  const targetWs = targetWorkspaceId ? findWorkspaceById(targetWorkspaceId) : null;
+  if (!targetOrgId || !targetWs || targetWs.orgId !== targetOrgId) {
+    return c.json({ error: 'This invitation has no valid organization and workspace. Ask an admin for a new invite.' }, 400);
+  }
 
   // Verify Google ID token
   let googleConfig: { clientId: string; allowedDomains: string[] };
@@ -326,7 +339,6 @@ export async function acceptInvite(c: import('hono').Context<AppEnv>): Promise<R
 
   // Find or create the user
   let user = findUserByGoogleId(googleUser.sub) ?? findUserByEmail(googleUser.email);
-  const isNewUser = !user;
   if (!user) {
     const id = randomUUID();
     const developerId = `dev-${id.slice(0, 8)}`;
@@ -343,17 +355,8 @@ export async function acceptInvite(c: import('hono').Context<AppEnv>): Promise<R
     updateUserGoogleId(user.id, googleUser.sub);
   }
 
-  // Assign org/workspace memberships. If the invite specified a target,
-  // route the user there. Otherwise default to 'default' org/workspace.
-  const targetOrgId = invitation.org_id ?? 'default';
-  const targetWorkspaceId = invitation.workspace_id ?? 'default-ws';
-  // For new users (and existing users without an active membership): always set.
-  // For existing users with an active membership: only override if the invite
-  // explicitly specified a target (don't silently move them).
-  const shouldAssign = isNewUser || invitation.org_id !== null || invitation.workspace_id !== null;
-  if (shouldAssign) {
-    assignUserToWorkspace(user.id, targetOrgId, targetWorkspaceId);
-  }
+  // Route the user to the invite's org/workspace.
+  assignUserToWorkspace(user.id, targetOrgId, targetWs.id);
 
   // Generate initial API key for this machine
   const { key, keyHash, keyPrefix } = generateApiKey();

@@ -277,6 +277,46 @@ describe('orgs / grants / scope integration', () => {
       expect(bad.status).toBe(403);
     });
 
+    it('rejects invites that do not name both an organization and a workspace', async () => {
+      const acmeId = randomUUID();
+      const acmeWs = randomUUID();
+      createOrganization({ id: acmeId, name: 'Acme' });
+      createWorkspace({ id: acmeWs, orgId: acmeId, name: 'Acme WS' });
+      const po = makeUser({ email: 'po@x.com', role: 'platform_owner' });
+      const token = await tokenFor({ id: po, email: 'po@x.com', role: 'platform_owner', developerId: 'po' });
+
+      const noWs = await app.request('/api/v1/admin/invitations', {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ email: 'nows@x.com', orgId: acmeId }),
+      });
+      expect(noWs.status).toBe(400);
+
+      const neither = await app.request('/api/v1/admin/invitations', {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ email: 'neither@x.com', role: 'platform_admin' }),
+      });
+      expect(neither.status).toBe(400);
+
+      // Workspace alone is enough: the org is filled in from it.
+      const wsOnly = await app.request('/api/v1/admin/invitations', {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ email: 'wsonly@x.com', workspaceId: acmeWs }),
+      });
+      expect(wsOnly.status).toBe(201);
+
+      const bulk = await app.request('/api/v1/admin/invitations/bulk', {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ invites: [{ email: 'b1@x.com', orgId: acmeId }, { email: 'b2@x.com', orgId: acmeId, workspaceId: acmeWs }] }),
+      });
+      const body = await bulk.json() as { results: Array<{ inviteUrl?: string; error?: string }> };
+      expect(body.results[0]?.error).toMatch(/organization and a workspace/);
+      expect(body.results[1]?.inviteUrl).toBeTruthy();
+    });
+
     it('bulk invite returns per-row scope errors without aborting batch', async () => {
       const acmeId = randomUUID();
       const acmeWs = randomUUID();

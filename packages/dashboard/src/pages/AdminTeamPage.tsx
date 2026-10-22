@@ -4,6 +4,8 @@ import { apiGet, apiPost, apiDelete, getUser } from '@/api/client';
 import { Plus, Copy, Trash2, Upload, X } from 'lucide-react';
 import { useOrgList, useWorkspaceList } from '@/api/hooks';
 import { useScope } from '@/lib/scope';
+import { usePagination } from '@/lib/usePagination';
+import { Pagination } from '@/components/Pagination';
 
 interface Invitation {
   id: string;
@@ -115,10 +117,10 @@ export function AdminTeamPage() {
   });
 
   const createInvite = useMutation({
-    mutationFn: ({ email, role, orgId, workspaceId }: { email: string; role: string; orgId: string; workspaceId?: string }) =>
+    mutationFn: ({ email, role, orgId, workspaceId }: { email: string; role: string; orgId: string; workspaceId: string }) =>
       apiPost<{ id: string; inviteUrl: string; email: string; expiresAt: string; role: string }>(
         '/api/v1/admin/invitations',
-        { email, role, orgId, ...(workspaceId ? { workspaceId } : {}) },
+        { email, role, orgId, workspaceId },
       ),
     onSuccess: (data) => {
       setInviteUrl(data.inviteUrl);
@@ -146,6 +148,9 @@ export function AdminTeamPage() {
   };
 
   const pendingInvites = invitations.filter((inv) => inv.status === 'pending');
+  const scopeKey = `${scope.orgId}|${scope.workspaceId}`;
+  const invitePager = usePagination(pendingInvites, scopeKey);
+  const memberPager = usePagination(members, scopeKey);
   const activeOrg = orgs.find((o) => o.id === scope.orgId);
   const scopeLabel = scope.orgId
     ? scope.workspaceId
@@ -184,8 +189,8 @@ export function AdminTeamPage() {
               placeholder="name@example.com"
               className="px-3 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink placeholder:text-ink-3 focus:outline-none w-60"
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && inviteEmail.trim()) {
-                  createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteRole === 'owner' ? undefined : inviteWorkspaceId });
+                if (e.key === 'Enter' && inviteEmail.trim() && inviteWorkspaceId) {
+                  createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteWorkspaceId });
                 }
               }}
             />
@@ -214,27 +219,25 @@ export function AdminTeamPage() {
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
             </select>
-            {/* Workspace selector — hidden for Platform Admin (platform-wide role, no workspace needed) */}
-            {inviteRole !== 'owner' && (
-              <select
-                value={inviteWorkspaceId}
-                onChange={(e) => setInviteWorkspaceId(e.target.value)}
-                className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
-                title="Workspace"
-                disabled={workspacesForInvite.length === 0}
-              >
-                {workspacesForInvite.length === 0 && <option value="">No workspaces…</option>}
-                {workspacesForInvite.map((w) => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
-            )}
+            {/* Workspace selector — every invitee lands in a workspace, admins included */}
+            <select
+              value={inviteWorkspaceId}
+              onChange={(e) => setInviteWorkspaceId(e.target.value)}
+              className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink"
+              title="Workspace"
+              disabled={workspacesForInvite.length === 0}
+            >
+              {workspacesForInvite.length === 0 && <option value="">No workspaces…</option>}
+              {workspacesForInvite.map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
             <button
               onClick={() => {
-                if (!inviteEmail.trim()) return;
-                createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteRole === 'owner' ? undefined : inviteWorkspaceId });
+                if (!inviteEmail.trim() || !inviteWorkspaceId) return;
+                createInvite.mutate({ email: inviteEmail.trim(), role: inviteRole, orgId: inviteOrgId, workspaceId: inviteWorkspaceId });
               }}
-              disabled={!inviteEmail.trim() || (inviteRole !== 'owner' && !inviteWorkspaceId) || createInvite.isPending}
+              disabled={!inviteEmail.trim() || !inviteWorkspaceId || createInvite.isPending}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink text-canvas rounded-btn text-[13px] font-medium disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -242,7 +245,7 @@ export function AdminTeamPage() {
             </button>
             <button
               onClick={() => setBulkOpen(true)}
-              disabled={inviteRole !== 'owner' && !inviteWorkspaceId}
+              disabled={!inviteWorkspaceId}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line bg-surface text-ink rounded-btn text-[13px] font-medium hover:bg-canvas-alt disabled:opacity-50"
               title="Invite many people at once"
             >
@@ -272,7 +275,7 @@ export function AdminTeamPage() {
           </div>
         )}
 
-        {pendingInvites.map((inv, i) => (
+        {invitePager.pageItems.map((inv, i) => (
           <div
             key={inv.id}
             className="flex items-center justify-between px-5 py-3"
@@ -301,6 +304,7 @@ export function AdminTeamPage() {
             </div>
           </div>
         ))}
+        <Pagination p={invitePager} />
       </div>
 
       {/* Members list */}
@@ -309,49 +313,53 @@ export function AdminTeamPage() {
           <div className="px-5 py-4 border-b border-line-2">
             <div className="text-[15px] font-medium">Members ({members.length})</div>
           </div>
-          {members.map((m, i) => (
-            <div
-              key={m.id}
-              className="flex items-center justify-between px-5 py-3"
-              style={{ borderTop: i === 0 ? 'none' : '1px solid var(--line-2)' }}
-            >
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="w-7 h-7 rounded-full text-white grid place-items-center text-[10px] font-semibold flex-shrink-0"
-                  style={{ background: `oklch(0.7 0.12 ${(i * 55) % 360})` }}
-                >
-                  {m.displayName.split(' ').map((n) => n[0]).join('')}
-                </div>
-                <div>
-                  <div className="font-medium text-[13px]">{m.displayName}</div>
-                  <div className="mono text-[10.5px] text-ink-3">{m.email}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                {m.role !== 'platform_owner' && m.role !== 'primary_owner' && m.id !== currentUser?.id && (
-                  <select
-                    value={m.role === 'owner' ? 'platform_admin' : m.role}
-                    onChange={(e) => changeRole.mutate({ id: m.id, role: e.target.value })}
-                    className="mono text-[10.5px] px-2 py-1 rounded-pill border border-line bg-surface text-ink"
-                    style={{ letterSpacing: '0.04em' }}
+          {memberPager.pageItems.map((m, j) => {
+            const i = memberPager.offset + j;
+            return (
+              <div
+                key={m.id}
+                className="flex items-center justify-between px-5 py-3"
+                style={{ borderTop: j === 0 ? 'none' : '1px solid var(--line-2)' }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="w-7 h-7 rounded-full text-white grid place-items-center text-[10px] font-semibold flex-shrink-0"
+                    style={{ background: `oklch(0.7 0.12 ${(i * 55) % 360})` }}
                   >
-                    <option value="platform_admin">Platform Admin</option>
-                    <option value="workspace_admin">Workspace Admin</option>
-                    <option value="developer">Developer</option>
-                  </select>
-                )}
-                <span
-                  className="mono text-[10.5px] px-2 py-0.5 rounded-pill border border-line text-ink-2"
-                  style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}
-                >
-                  {m.role === 'platform_owner' || m.role === 'primary_owner' ? 'Owner' :
-                   m.role === 'platform_admin' || m.role === 'owner' ? 'Admin' :
-                   m.role === 'workspace_admin' ? 'Workspace Admin' :
-                   'Developer'}
-                </span>
+                    {m.displayName.split(' ').map((n) => n[0]).join('')}
+                  </div>
+                  <div>
+                    <div className="font-medium text-[13px]">{m.displayName}</div>
+                    <div className="mono text-[10.5px] text-ink-3">{m.email}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {m.role !== 'platform_owner' && m.role !== 'primary_owner' && m.id !== currentUser?.id && (
+                    <select
+                      value={m.role === 'owner' ? 'platform_admin' : m.role}
+                      onChange={(e) => changeRole.mutate({ id: m.id, role: e.target.value })}
+                      className="mono text-[10.5px] px-2 py-1 rounded-pill border border-line bg-surface text-ink"
+                      style={{ letterSpacing: '0.04em' }}
+                    >
+                      <option value="platform_admin">Platform Admin</option>
+                      <option value="workspace_admin">Workspace Admin</option>
+                      <option value="developer">Developer</option>
+                    </select>
+                  )}
+                  <span
+                    className="mono text-[10.5px] px-2 py-0.5 rounded-pill border border-line text-ink-2"
+                    style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}
+                  >
+                    {m.role === 'platform_owner' || m.role === 'primary_owner' ? 'Owner' :
+                     m.role === 'platform_admin' || m.role === 'owner' ? 'Admin' :
+                     m.role === 'workspace_admin' ? 'Workspace Admin' :
+                     'Developer'}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+          <Pagination p={memberPager} />
         </div>
       )}
 

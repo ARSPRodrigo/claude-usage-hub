@@ -51,3 +51,6 @@ temp/
 
 # Collector local data
 .claude-usage-hub/
+
+# Playwright MCP browser logs and snapshots (may contain hub URLs)
+.playwright-mcp/

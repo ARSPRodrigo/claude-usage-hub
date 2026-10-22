@@ -51,7 +51,7 @@ function decodeJwtPart(part: string): Record<string, unknown> {
  *
  * @param idToken  - Raw Google ID token from frontend
  * @param clientId - Your Google OAuth client ID (must match token audience)
- * @param allowedDomains - Restrict to these Google Workspace domains (e.g. ["codegen.net", "therisevillage.com"])
+ * @param allowedDomains - Restrict to these Google Workspace domains (e.g. ["example.com", "example.org"])
  */
 export async function verifyGoogleToken(
   idToken: string,

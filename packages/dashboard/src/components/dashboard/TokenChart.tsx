@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { getModelColors, getTheme, modelGradientId } from '@/lib/chart-theme';
 import { ChartTooltip } from './ChartTooltip';
-import { modelShortName, formatTokens } from '@/lib/utils';
+import { modelFamilyName, formatTokens } from '@/lib/utils';
 
 interface TimeseriesPoint {
   bucket: string;
@@ -37,15 +37,17 @@ export function TokenChart({ data, isLoading, range = '7D' }: TokenChartProps) {
   // Pivot: group by bucket, spread models as columns
   const bucketMap = new Map<string, Record<string, number>>();
   for (const point of data) {
-    const shortName = modelShortName(point.model);
+    const shortName = modelFamilyName(point.model);
     const existing = bucketMap.get(point.bucket) ?? {};
     existing[shortName] = (existing[shortName] ?? 0) + point.totalTokens;
     bucketMap.set(point.bucket, existing);
   }
 
-  const models = [...new Set(data.map((p) => modelShortName(p.model)))].sort((a, b) => {
-    const order = ['Opus', 'Sonnet', 'Haiku'];
-    return order.indexOf(a) - order.indexOf(b);
+  const models = [...new Set(data.map((p) => modelFamilyName(p.model)))].sort((a, b) => {
+    // Known families first in this order; anything else after, alphabetically.
+    const order = ['Fable', 'Mythos', 'Opus', 'Sonnet', 'Haiku'];
+    const rank = (m: string) => (order.includes(m) ? order.indexOf(m) : order.length);
+    return rank(a) - rank(b) || a.localeCompare(b);
   });
 
   const formatBucket = (bucket: string): string => {
@@ -101,7 +103,7 @@ export function TokenChart({ data, isLoading, range = '7D' }: TokenChartProps) {
             <div key={m} className="flex items-center gap-1.5">
               <span
                 className="w-2.5 h-2.5 rounded-sm"
-                style={{ background: modelColors[m] }}
+                style={{ background: modelColors[m] ?? '#94a3b8' }}
               />
               <span className="text-ink-2">{m}</span>
               <span className="mono tabular text-ink-3 text-[11px]">

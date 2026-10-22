@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatTokens, formatCost, formatDuration, truncateId, modelShortName, modelBadgeStyle } from '../lib/utils';
+import { formatTokens, formatCost, formatDuration, truncateId, modelShortName, modelFamilyName, modelBadgeStyle } from '../lib/utils';
 
 describe('formatTokens', () => {
   it('formats billions', () => expect(formatTokens(3_000_000_000)).toBe('3.0B'));
@@ -38,10 +38,17 @@ describe('truncateId', () => {
 });
 
 describe('modelShortName', () => {
-  it('returns Opus', () => expect(modelShortName('claude-opus-4-6')).toBe('Opus'));
-  it('returns Sonnet', () => expect(modelShortName('claude-sonnet-4-6')).toBe('Sonnet'));
-  it('returns Haiku', () => expect(modelShortName('claude-haiku-4-5-20251001')).toBe('Haiku'));
+  it('includes the version', () => expect(modelShortName('claude-opus-4-6')).toBe('Opus 4.6'));
+  it('handles single-number versions', () => expect(modelShortName('claude-sonnet-5')).toBe('Sonnet 5'));
+  it('drops date snapshots', () => expect(modelShortName('claude-haiku-4-5-20251001')).toBe('Haiku 4.5'));
+  it('handles legacy ids', () => expect(modelShortName('claude-3-5-haiku-20241022')).toBe('Haiku 3.5'));
+  it('handles new families', () => expect(modelShortName('claude-fable-5-1')).toBe('Fable 5.1'));
   it('returns raw name for unknown', () => expect(modelShortName('gpt-4')).toBe('gpt-4'));
+});
+
+describe('modelFamilyName', () => {
+  it('returns the family', () => expect(modelFamilyName('claude-opus-5-5')).toBe('Opus'));
+  it('returns raw name for unknown', () => expect(modelFamilyName('gpt-4')).toBe('gpt-4'));
 });
 
 describe('modelBadgeStyle', () => {
@@ -60,6 +67,11 @@ describe('modelBadgeStyle', () => {
   });
   it('returns fallback for unknown model', () => {
     expect(modelBadgeStyle('Unknown').color).toBe('var(--ink-3)');
+  });
+
+  it('colours versioned names by family', () => {
+    expect(modelBadgeStyle('Opus 5.5').color).toBe('var(--m-opus)');
+    expect(modelBadgeStyle('Fable 5.1').color).toBe('var(--m-fable)');
   });
   it('includes semi-transparent background via color-mix', () => {
     const style = modelBadgeStyle('Opus');

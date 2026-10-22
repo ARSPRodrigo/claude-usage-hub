@@ -19,7 +19,7 @@ import {
 } from '../db/auth-repository.js';
 import { hashPassword, generateApiKey } from '../services/auth-utils.js';
 import { invitationRoutes } from './invitations.js';
-import { getDeveloperStats, getDashboardStats, getTokenTimeseries, getAggregateTokensByTier } from '../db/repository.js';
+import { getDeveloperStats, getDashboardStats, getTokenTimeseries, getAggregateTokensByTier, getModelPricingStatus } from '../db/repository.js';
 import {
   listOrganizations,
   listWorkspaces,
@@ -537,6 +537,7 @@ admin.get('/members', (c) => {
   const users = listUsers();
   const orgOwns = allOrgOwnerships();
   const wsOwns = allWorkspaceOwnerships();
+  const wsById = new Map(listWorkspaces().map((w) => [w.id, w]));
   return c.json(
     users
       .map((u) => {
@@ -551,8 +552,13 @@ admin.get('/members', (c) => {
           createdAt: u.created_at,
           currentOrgId: org?.orgId ?? null,
           currentWorkspaceId: ws?.workspaceId ?? null,
+          currentWorkspaceName: ws ? (wsById.get(ws.workspaceId)?.name ?? null) : null,
           ownedOrgIds: orgOwns[u.id] ?? [],
           ownedWorkspaceIds: wsOwns[u.id] ?? [],
+          ownedWorkspaces: (wsOwns[u.id] ?? []).map((id) => {
+            const w = wsById.get(id);
+            return { id, name: w?.name ?? null, orgId: w?.orgId ?? null };
+          }),
         };
       })
       .filter((m) => {
@@ -757,6 +763,18 @@ admin.post('/users/:id/demote-platform-admin', requirePlatformOwner, (c) => {
 });
 
 // ── Domain auto-assign rules (Phase 4) ───────────────────────────────────
+
+// ── Model pricing ────────────────────────────────────────────────────────
+
+/** GET /api/v1/admin/models — every model seen in usage data and how it is priced. */
+let modelStatusCache: { at: number; body: ReturnType<typeof getModelPricingStatus> } | null = null;
+admin.get('/models', requirePlatformAdmin, (c) => {
+  // Grouping all entries is a full scan; a few minutes of staleness is fine here.
+  if (!modelStatusCache || Date.now() - modelStatusCache.at > 5 * 60_000) {
+    modelStatusCache = { at: Date.now(), body: getModelPricingStatus() };
+  }
+  return c.json(modelStatusCache.body);
+});
 
 /** GET /api/v1/admin/domain-rules — platform admin only */
 admin.get('/domain-rules', requirePlatformAdmin, (c) => {

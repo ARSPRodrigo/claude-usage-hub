@@ -1,6 +1,6 @@
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { getModelColors } from '@/lib/chart-theme';
-import { modelShortName, formatTokens } from '@/lib/utils';
+import { modelFamilyName, formatTokens } from '@/lib/utils';
 
 interface ModelMixEntry {
   model: string;
@@ -38,7 +38,7 @@ export function ModelMixChart({ data, isLoading }: ModelMixChartProps) {
 
   const aggregated = new Map<string, { tokens: number; percentage: number; color: string }>();
   for (const d of data) {
-    const name = modelShortName(d.model);
+    const name = modelFamilyName(d.model);
     const color = modelColors[name] ?? 'var(--ink-3)';
     const existing = aggregated.get(name);
     if (existing) {

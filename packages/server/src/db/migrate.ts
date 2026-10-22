@@ -220,6 +220,23 @@ export function runMigrations(raw: Database.Database, mode?: AppMode): void {
     // Column already exists — safe to ignore
   }
 
+  // Cache-write TTL split (5m vs 1h), reported by newer collectors. NULL = unknown.
+  try {
+    raw.exec(`ALTER TABLE usage_entries ADD COLUMN cache_write_5m_tokens INTEGER`);
+  } catch { /* exists */ }
+  try {
+    raw.exec(`ALTER TABLE usage_entries ADD COLUMN cache_write_1h_tokens INTEGER`);
+  } catch { /* exists */ }
+
+  // Small key/value store for server bookkeeping (e.g. the applied pricing version).
+  raw.exec(`
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key         TEXT PRIMARY KEY,
+      value       TEXT NOT NULL,
+      updated_at  TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // Org / workspace scope on invitations.
   try {
     raw.exec(`ALTER TABLE invitations ADD COLUMN org_id TEXT REFERENCES organizations(id)`);

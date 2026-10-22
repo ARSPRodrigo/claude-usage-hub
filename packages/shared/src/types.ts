@@ -10,6 +10,10 @@ export interface UsageMetrics {
   outputTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  /** Part of cacheCreationTokens written with the 5-minute TTL, when the client reports the split. */
+  cacheWrite5mTokens?: number;
+  /** Part of cacheCreationTokens written with the 1-hour TTL, when the client reports the split. */
+  cacheWrite1hTokens?: number;
 }
 
 /** A single parsed usage entry extracted from a JSONL assistant message. */

@@ -4,6 +4,8 @@ import { apiGet, apiPost, apiDelete, getUser, setUser } from '@/api/client';
 import { useDashboardStats } from '@/api/hooks';
 import { Pencil, Plus, Copy } from 'lucide-react';
 import { formatRelative, formatTokens, formatCost } from '@/lib/utils';
+import { usePagination } from '@/lib/usePagination';
+import { Pagination } from '@/components/Pagination';
 
 interface ApiKeyRow {
   id: string;
@@ -119,6 +121,7 @@ export function ProfilePage() {
     : user?.email?.slice(0, 2).toUpperCase() ?? '?';
 
   const activeKeys = keys.filter((k) => !k.revokedAt);
+  const pager = usePagination(activeKeys);
 
   const key = newKey?.key ?? 'chub_...';
 
@@ -326,8 +329,8 @@ export function ProfilePage() {
             </tr>
           </thead>
           <tbody>
-            {activeKeys.map((k, i) => (
-              <tr key={k.id} style={{ borderBottom: i === activeKeys.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+            {pager.pageItems.map((k, i) => (
+              <tr key={k.id} style={{ borderBottom: i === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
                 <td className="px-4 py-3.5 font-medium">{k.label}</td>
                 <td className="px-4 py-3.5">
                   <code className="mono text-xs bg-canvas-alt px-2 py-0.5 rounded-pill border border-line">
@@ -356,6 +359,7 @@ export function ProfilePage() {
             ))}
           </tbody>
         </table>
+        <Pagination p={pager} />
       </div>
 
       {/* Danger zone */}

@@ -239,8 +239,10 @@ export interface MemberRow {
   createdAt: string;
   currentOrgId: string | null;
   currentWorkspaceId: string | null;
+  currentWorkspaceName: string | null;
   ownedOrgIds: string[];
   ownedWorkspaceIds: string[];
+  ownedWorkspaces: { id: string; name: string | null; orgId: string | null }[];
 }
 
 /** All members with their current org/workspace — Platform Admin only. */
@@ -311,5 +313,32 @@ export function useAdminSettings() {
   return useQuery({
     queryKey: ['admin-settings'],
     queryFn: () => apiGet<AdminSettingsResponse>('/api/v1/admin/settings'),
+  });
+}
+
+export interface ModelPricingStatus {
+  model: string;
+  displayName: string;
+  family: string;
+  entryCount: number;
+  costUsd: number;
+  lastSeen: string;
+  /** exact: listed price · estimated: priced from the nearest listed model · unpriced: not a Claude model ($0) */
+  source: 'exact' | 'estimated' | 'unpriced';
+  basedOn: string | null;
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cacheWritePerMillion: number;
+  cacheWrite5mPerMillion: number | null;
+  cacheReadPerMillion: number;
+}
+
+/** Every model seen in usage data and how it is priced — Platform Admin only. */
+export function useModelPricingStatus(enabled = true) {
+  return useQuery({
+    queryKey: ['admin-models'],
+    queryFn: () => apiGet<{ pricingVersion: string; models: ModelPricingStatus[] }>('/api/v1/admin/models'),
+    staleTime: 5 * 60_000,
+    enabled,
   });
 }

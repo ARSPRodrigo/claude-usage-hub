@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { resolve, dirname } from 'node:path';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseJsonlFile } from '../parser.js';
 
@@ -35,6 +37,27 @@ describe('parseJsonlFile', () => {
     expect(first.usage.outputTokens).toBe(0);
     expect(first.usage.cacheCreationTokens).toBe(500);
     expect(first.model).toBe('claude-opus-4-6');
+  });
+
+  it('captures the cache-write TTL split when Claude Code reports it', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'cuh-parser-')), 'ttl.jsonl');
+    writeFileSync(file, JSON.stringify({
+      type: 'assistant', sessionId: 's', timestamp: '2026-10-01T00:00:00Z', requestId: 'r',
+      message: {
+        id: 'm', model: 'claude-opus-5-5', role: 'assistant',
+        usage: {
+          input_tokens: 1, output_tokens: 2, cache_creation_input_tokens: 300, cache_read_input_tokens: 0,
+          cache_creation: { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 200 },
+        },
+      },
+    }) + '\n');
+    const { entries } = await parseJsonlFile(file);
+    expect(entries[0]!.usage).toMatchObject({ cacheCreationTokens: 300, cacheWrite5mTokens: 100, cacheWrite1hTokens: 200 });
+  });
+
+  it('leaves the split unset for older logs', async () => {
+    const { entries } = await parseJsonlFile(FIXTURE);
+    expect(entries[0]!.usage.cacheWrite5mTokens).toBeUndefined();
   });
 
   it('returns new offset equal to file size', async () => {

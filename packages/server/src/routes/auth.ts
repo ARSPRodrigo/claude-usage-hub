@@ -17,6 +17,7 @@ import {
   findDomainRuleForEmail,
   assignUserToWorkspace,
   getActiveOrgMembership,
+  getActiveWorkspaceMembership,
 } from '../db/org-repository.js';
 
 const auth = new Hono<AppEnv>();
@@ -94,8 +95,13 @@ auth.post('/google/verify', async (c) => {
     }
   }
 
-  // Create new user if not found
-  const isNewUser = !user;
+  // No self-sign-up: a new account needs a domain rule that places it in an
+  // org/workspace. Everyone else must come in through an invite link.
+  const rule = !user || !getActiveOrgMembership(user.id) ? findDomainRuleForEmail(googleUser.email) : null;
+  if (!user && !rule) {
+    return c.json({ error: 'You need an invitation to join. Ask an admin to invite you, then open the invite link.' }, 403);
+  }
+
   if (!user) {
     const id = randomUUID();
     const developerId = `dev-${id.slice(0, 8)}`;
@@ -114,12 +120,11 @@ auth.post('/google/verify', async (c) => {
   // existing users who have no active org membership (e.g. accounts that
   // never landed in any org). Existing users WITH an active membership
   // are left alone — admins move them manually.
-  const hasActiveOrg = !!getActiveOrgMembership(user.id);
-  if (isNewUser || !hasActiveOrg) {
-    const rule = findDomainRuleForEmail(user.email);
-    if (rule) {
-      assignUserToWorkspace(user.id, rule.orgId, rule.workspaceId);
-    }
+  if (rule) {
+    assignUserToWorkspace(user.id, rule.orgId, rule.workspaceId);
+  } else if (!getActiveWorkspaceMembership(user.id) && user.role !== 'platform_owner') {
+    // The platform owner is exempt so a missing membership can't lock them out.
+    return c.json({ error: 'Your account is not assigned to a workspace yet. Ask an admin to add you.' }, 403);
   }
 
   const token = await signJwt({

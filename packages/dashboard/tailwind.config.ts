@@ -30,6 +30,7 @@ export default {
           opus: 'var(--m-opus)',
           sonnet: 'var(--m-sonnet)',
           haiku: 'var(--m-haiku)',
+          fable: 'var(--m-fable)',
         },
       },
       fontFamily: {

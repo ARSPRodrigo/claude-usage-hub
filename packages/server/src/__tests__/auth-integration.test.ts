@@ -7,23 +7,30 @@ import { setJwtSecret, signJwt } from '../middleware/auth.js';
 import { hashPassword, generateApiKey } from '../services/auth-utils.js';
 import { createUser, createApiKey } from '../db/auth-repository.js';
 import { insertEntries } from '../db/repository.js';
+import { getPricing } from '@claude-usage-hub/shared';
 import type { EnrichedEntry } from '@claude-usage-hub/shared';
 
 const JWT_SECRET = 'test-secret-for-auth-tests';
 
+// The server prices entries itself from tokens, so a requested cost is
+// expressed as output tokens at the model's output rate.
 function makeEntry(overrides: Partial<EnrichedEntry> = {}): EnrichedEntry {
+  const model = overrides.model ?? 'claude-opus-4-6';
+  const usage = overrides.usage ?? (overrides.costUsd !== undefined
+    ? { inputTokens: 0, outputTokens: Math.round((overrides.costUsd / getPricing(model).outputPerMillion) * 1_000_000), cacheCreationTokens: 0, cacheReadTokens: 0 }
+    : { inputTokens: 100, outputTokens: 200, cacheCreationTokens: 50, cacheReadTokens: 25 });
   return {
     sessionId: 's1',
     messageId: `msg_${Math.random().toString(36).slice(2, 8)}`,
     requestId: `req_${Math.random().toString(36).slice(2, 8)}`,
     timestamp: new Date().toISOString(),
     model: 'claude-opus-4-6',
-    usage: { inputTokens: 100, outputTokens: 200, cacheCreationTokens: 50, cacheReadTokens: 25 },
     serviceTier: 'standard',
     developerId: 'dev-1',
     projectAlias: 'proj-a',
     costUsd: 0.05,
     ...overrides,
+    usage,
   };
 }
 

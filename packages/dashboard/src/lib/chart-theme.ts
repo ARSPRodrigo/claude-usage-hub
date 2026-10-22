@@ -16,6 +16,8 @@ export function getModelColors(_isDark?: boolean): Record<string, string> {
     Opus: cssVar('--m-opus'),
     Sonnet: cssVar('--m-sonnet'),
     Haiku: cssVar('--m-haiku'),
+    Fable: cssVar('--m-fable'),
+    Mythos: cssVar('--m-fable'),
   };
 }
 

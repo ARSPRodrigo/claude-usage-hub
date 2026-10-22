@@ -7,14 +7,18 @@ import {
   useAdminWorkspaceList,
   useAdminMembers,
   useWorkspaceList,
+  useModelPricingStatus,
   type OrgRow,
   type WorkspaceRow,
   type MemberRow,
 } from '@/api/hooks';
-import { formatRelative } from '@/lib/utils';
+import { formatRelative, formatCost, formatTokens, modelBadgeStyle } from '@/lib/utils';
+import { PricingEstimateBanner } from '@/components/PricingEstimateBanner';
 import { useScope } from '@/lib/scope';
+import { usePagination } from '@/lib/usePagination';
+import { Pagination } from '@/components/Pagination';
 
-export type ManageSection = 'orgs' | 'workspaces' | 'members' | 'audit' | 'domain-rules';
+export type ManageSection = 'orgs' | 'workspaces' | 'members' | 'audit' | 'domain-rules' | 'models';
 
 const SECTION_META: Record<ManageSection, { title: string; subtitle: string }> = {
   orgs:           { title: 'Organizations', subtitle: 'Create, rename, and remove organizations.' },
@@ -22,6 +26,7 @@ const SECTION_META: Record<ManageSection, { title: string; subtitle: string }> =
   members:        { title: 'Members',       subtitle: 'Search every member and move them between orgs and workspaces.' },
   audit:          { title: 'Audit log',     subtitle: 'Recent role and membership changes.' },
   'domain-rules': { title: 'Domain rules',  subtitle: 'Auto-assign new sign-ups to an org and workspace by email domain.' },
+  models:         { title: 'Models',        subtitle: 'Every model seen in usage data and the price applied to it.' },
 };
 
 async function apiPatch<T>(path: string, body: unknown): Promise<T> {
@@ -54,6 +59,7 @@ export function ManagePage({ section }: { section: ManageSection }) {
       {section === 'members' && <MembersTab />}
       {section === 'audit' && <AuditTab />}
       {section === 'domain-rules' && <DomainRulesTab />}
+      {section === 'models' && <ModelsTab />}
     </div>
   );
 }
@@ -65,6 +71,7 @@ function OrgsTab() {
   const currentUser = getUser();
   const canCreateOrDelete = isPlatformAdmin(currentUser?.role);
   const { data: orgs = [], isLoading } = useAdminOrgList();
+  const pager = usePagination(orgs);
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -132,8 +139,8 @@ function OrgsTab() {
               </tr>
             </thead>
             <tbody>
-              {orgs.map((o, i) => (
-                <tr key={o.id} style={{ borderBottom: i === orgs.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+              {pager.pageItems.map((o, i) => (
+                <tr key={o.id} style={{ borderBottom: i === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
                   <td className="px-4 py-3 font-medium">
                     {editingId === o.id ? (
                       <input
@@ -187,6 +194,7 @@ function OrgsTab() {
             </tbody>
           </table>
         )}
+        <Pagination p={pager} />
       </div>
     </div>
   );
@@ -203,6 +211,7 @@ function WorkspacesTab() {
   const orgId = activeOrgId ?? orgs[0]?.id ?? null;
 
   const { data: workspaces = [], isLoading } = useAdminWorkspaceList(orgId);
+  const pager = usePagination(workspaces, orgId);
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -283,8 +292,8 @@ function WorkspacesTab() {
               </tr>
             </thead>
             <tbody>
-              {workspaces.map((w, i) => (
-                <tr key={w.id} style={{ borderBottom: i === workspaces.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+              {pager.pageItems.map((w, i) => (
+                <tr key={w.id} style={{ borderBottom: i === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
                   <td className="px-4 py-3 font-medium">
                     {editingId === w.id ? (
                       <input
@@ -336,6 +345,7 @@ function WorkspacesTab() {
             </tbody>
           </table>
         )}
+        <Pagination p={pager} />
       </div>
     </div>
   );
@@ -393,6 +403,18 @@ function MembersTab() {
   useEffect(() => {
     setOrgFilter(scope.orgId ?? 'all');
   }, [scope.orgId]);
+  // Workspace filter only applies once a real org is picked.
+  const [wsFilter, setWsFilter] = useState<'all' | string>(scope.workspaceId ?? 'all');
+  useEffect(() => {
+    setWsFilter(scope.workspaceId ?? 'all');
+  }, [scope.workspaceId]);
+  const filterOrgId = orgFilter !== 'all' && orgFilter !== 'unassigned' ? orgFilter : null;
+  const { data: orgWorkspaces = [], isSuccess: orgWorkspacesLoaded } = useAdminWorkspaceList(filterOrgId);
+  // Drop a workspace pick that doesn't belong to the newly chosen org.
+  useEffect(() => {
+    if (!orgWorkspacesLoaded || wsFilter === 'all') return;
+    if (!orgWorkspaces.some((w) => w.id === wsFilter)) setWsFilter('all');
+  }, [orgWorkspaces, orgWorkspacesLoaded, wsFilter]);
   const [movingMember, setMovingMember] = useState<MemberRow | null>(null);
   const [grantingMember, setGrantingMember] = useState<MemberRow | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -405,13 +427,16 @@ function MembersTab() {
       } else if (orgFilter !== 'all') {
         if ((m.currentOrgId ?? '') !== orgFilter) return false;
       }
+      if (filterOrgId && wsFilter !== 'all' && m.currentWorkspaceId !== wsFilter) return false;
       if (!q) return true;
       return (
         m.email.toLowerCase().includes(q) ||
         m.displayName.toLowerCase().includes(q)
       );
     });
-  }, [members, query, orgFilter]);
+  }, [members, query, orgFilter, filterOrgId, wsFilter]);
+
+  const pager = usePagination(filtered, `${query}|${orgFilter}|${wsFilter}`);
 
   const unassignedCount = useMemo(() => members.filter((m) => m.currentOrgId === null).length, [members]);
 
@@ -457,6 +482,20 @@ function MembersTab() {
             <option value="unassigned">Unassigned ({unassignedCount})</option>
           )}
         </select>
+        <select
+          value={wsFilter}
+          onChange={(e) => setWsFilter(e.target.value)}
+          disabled={!filterOrgId}
+          className="px-2 py-1.5 text-[13px] rounded-btn border border-line bg-surface text-ink disabled:opacity-50"
+          title={filterOrgId ? 'Workspace' : 'Pick an organization to filter by workspace'}
+        >
+          <option value="all">All workspaces</option>
+          {[...orgWorkspaces]
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+            .map((w) => (
+              <option key={w.id} value={w.id}>{w.name}</option>
+            ))}
+        </select>
         <span className="text-ink-3 text-xs ml-auto">{filtered.length} of {members.length} member{members.length === 1 ? '' : 's'}</span>
         {showTransferButton && (
           <button
@@ -484,16 +523,16 @@ function MembersTab() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m, i) => (
-                <tr key={m.id} style={{ borderBottom: i === filtered.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+              {pager.pageItems.map((m, i) => (
+                <tr key={m.id} style={{ borderBottom: i === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
                   <td className="px-4 py-3 font-medium">{m.displayName}</td>
                   <td className="px-4 py-3 mono text-ink-3 text-xs">{m.email}</td>
                   <td className="px-4 py-3 text-ink-2 text-xs">{labelForRole(m.role)}</td>
                   <td className="px-4 py-3 text-ink-2">
                     {m.currentOrgId ? (orgById.get(m.currentOrgId)?.name ?? m.currentOrgId) : <span className="text-ink-4">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-ink-2 mono text-xs">
-                    {m.currentWorkspaceId ?? <span className="text-ink-4">—</span>}
+                  <td className="px-4 py-3 text-ink-2" title={m.currentWorkspaceId ?? undefined}>
+                    {m.currentWorkspaceId ? (m.currentWorkspaceName ?? m.currentWorkspaceId) : <span className="text-ink-4">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <OwnedSummary
@@ -523,6 +562,7 @@ function MembersTab() {
             </tbody>
           </table>
         )}
+        <Pagination p={pager} />
       </div>
 
       {movingMember && (
@@ -964,11 +1004,14 @@ function GrantsModal({
               </div>
             ) : (
               <div className="space-y-1.5">
-                {member.ownedWorkspaceIds.map((id) => (
-                  <div key={id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-btn border border-line">
-                    <div className="text-[13px] mono">{id}</div>
+                {member.ownedWorkspaces.map((w) => (
+                  <div key={w.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-btn border border-line">
+                    <div className="text-[13px]" title={w.id}>
+                      {w.name ?? w.id}
+                      {w.orgId && <span className="text-ink-3"> · {orgById.get(w.orgId)?.name ?? w.orgId}</span>}
+                    </div>
                     <button
-                      onClick={() => removeWs.mutate(id)}
+                      onClick={() => removeWs.mutate(w.id)}
                       disabled={removeWs.isPending}
                       className="p-1 text-ink-3 hover:text-neg disabled:opacity-50"
                       title="Revoke ownership"
@@ -1025,6 +1068,7 @@ function GrantsModal({
 
 function AuditTab() {
   const { data: entries = [], isLoading } = useAdminAuditLog();
+  const pager = usePagination(entries);
   return (
     <div className="rounded-card border border-line bg-surface overflow-hidden">
       <div className="px-5 py-4 border-b border-line-2">
@@ -1045,11 +1089,11 @@ function AuditTab() {
             </tr>
           </thead>
           <tbody>
-            {entries.map((e, i) => {
+            {pager.pageItems.map((e, i) => {
               const verb = ACTION_LABELS[e.action] ?? e.action;
               const showTarget = e.targetId !== e.actorId;
               return (
-                <tr key={e.id} style={{ borderBottom: i === entries.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+                <tr key={e.id} style={{ borderBottom: i === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
                   <td className="px-4 py-3 text-ink-3 text-xs whitespace-nowrap">{formatRelative(e.timestamp)}</td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-[13px]">{e.actorName ?? e.actorId}</div>
@@ -1077,6 +1121,7 @@ function AuditTab() {
           </tbody>
         </table>
       )}
+      <Pagination p={pager} />
     </div>
   );
 }
@@ -1106,6 +1151,7 @@ function DomainRulesTab() {
     staleTime: 30_000,
   });
   const { data: orgs = [] } = useAdminOrgList();
+  const pager = usePagination(rules);
 
   const [domain, setDomain] = useState('');
   const [orgId, setOrgId] = useState('');
@@ -1211,8 +1257,8 @@ function DomainRulesTab() {
               </tr>
             </thead>
             <tbody>
-              {rules.map((r, i) => (
-                <tr key={r.id} style={{ borderBottom: i === rules.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+              {pager.pageItems.map((r, i) => (
+                <tr key={r.id} style={{ borderBottom: i === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
                   <td className="px-4 py-3 mono">@{r.emailDomain}</td>
                   <td className="px-4 py-3">{orgById.get(r.orgId)?.name ?? r.orgId}</td>
                   <td className="px-4 py-3 mono text-ink-3 text-xs">{r.workspaceId}</td>
@@ -1230,6 +1276,89 @@ function DomainRulesTab() {
             </tbody>
           </table>
         )}
+        <Pagination p={pager} />
+      </div>
+    </div>
+  );
+}
+
+// ── Models tab ─────────────────────────────────────────────────────────────
+
+const SOURCE_LABELS: Record<'exact' | 'estimated' | 'unpriced', { label: string; hint: string }> = {
+  exact:     { label: 'Listed',    hint: 'Official price from the hub\'s price table.' },
+  estimated: { label: 'Estimated', hint: 'Not in the price table yet — priced like the nearest listed model.' },
+  unpriced:  { label: 'Not priced', hint: 'Not a Claude model — counted at $0.' },
+};
+
+function perMTok(v: number | null): string {
+  if (v === null) return '—';
+  return `$${v.toLocaleString(undefined, { maximumFractionDigits: 3 })}`;
+}
+
+function ModelsTab() {
+  const { data, isLoading } = useModelPricingStatus();
+  const models = data?.models ?? [];
+  const pager = usePagination(models);
+
+  return (
+    <div>
+      <PricingEstimateBanner linkToModels={false} />
+      <div className="rounded-card border border-line bg-surface overflow-hidden">
+        <div className="px-5 py-4 border-b border-line-2">
+          <div className="text-[15px] font-medium">Models in use</div>
+          <div className="text-ink-3 text-[13px] mt-1">
+            Prices per million tokens{data ? ` · price table ${data.pricingVersion}` : ''}. Cache writes use the
+            1-hour rate unless the collector reports the 5-minute split.
+          </div>
+        </div>
+        {isLoading ? (
+          <div className="p-5 text-sm text-ink-3">Loading…</div>
+        ) : models.length === 0 ? (
+          <div className="p-5 text-sm text-ink-3">No usage yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-line">
+                  {['Model', 'Pricing', 'Input', 'Output', 'Cache write 5m / 1h', 'Cache read', 'Entries', 'Cost', 'Last seen'].map((h, i) => (
+                    <th key={h} className="label py-2.5 px-4 whitespace-nowrap" style={{ textAlign: i >= 2 && i <= 7 ? 'right' : 'left' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pager.pageItems.map((m, i) => {
+                  const src = SOURCE_LABELS[m.source];
+                  return (
+                    <tr key={m.model} style={{ borderBottom: i === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)' }}>
+                      <td className="px-4 py-3">
+                        <span className="px-1.5 py-0.5 text-xs font-medium rounded-pill" style={modelBadgeStyle(m.displayName)}>
+                          {m.displayName}
+                        </span>
+                        <div className="mono text-ink-3 text-[11px] mt-1">{m.model}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap" title={src.hint}>
+                        <span className={m.source === 'estimated' ? 'font-medium' : 'text-ink-2'} style={m.source === 'estimated' ? { color: 'var(--accent)' } : undefined}>
+                          {src.label}
+                        </span>
+                        {m.source === 'estimated' && m.basedOn && (
+                          <div className="text-ink-3 text-[11px] mt-0.5">as {m.basedOn}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 mono text-right">{perMTok(m.inputPerMillion)}</td>
+                      <td className="px-4 py-3 mono text-right">{perMTok(m.outputPerMillion)}</td>
+                      <td className="px-4 py-3 mono text-right whitespace-nowrap">{perMTok(m.cacheWrite5mPerMillion)} / {perMTok(m.cacheWritePerMillion)}</td>
+                      <td className="px-4 py-3 mono text-right">{perMTok(m.cacheReadPerMillion)}</td>
+                      <td className="px-4 py-3 mono text-right">{formatTokens(m.entryCount)}</td>
+                      <td className="px-4 py-3 mono text-right">{formatCost(m.costUsd)}</td>
+                      <td className="px-4 py-3 text-ink-3 text-xs whitespace-nowrap">{formatRelative(m.lastSeen)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Pagination p={pager} />
       </div>
     </div>
   );

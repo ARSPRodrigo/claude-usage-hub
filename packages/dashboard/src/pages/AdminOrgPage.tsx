@@ -5,6 +5,9 @@ import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import { formatTokens, formatCost, formatRelative } from '@/lib/utils';
 import { useScope } from '@/lib/scope';
+import { PricingEstimateBanner } from '@/components/PricingEstimateBanner';
+import { usePagination } from '@/lib/usePagination';
+import { Pagination } from '@/components/Pagination';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
@@ -78,6 +81,7 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
 
   const totalCost = devStats.reduce((s, d) => s + d.costUsd, 0);
   const totalTokens = devStats.reduce((s, d) => s + d.totalTokens, 0);
+  const pager = usePagination(devStats, `${range}|${scope.orgId}|${scope.workspaceId}`);
   const maxTokens = Math.max(...devStats.map((d) => d.totalTokens), 1);
 
   return (
@@ -103,6 +107,8 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
           <TimeRangeSelector value={range} onChange={setRange} />
         </div>
       </div>
+
+      <PricingEstimateBanner />
 
       {/* Stats strip */}
       <div
@@ -151,14 +157,15 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
               </tr>
             </thead>
             <tbody>
-              {devStats.map((d, i) => {
+              {pager.pageItems.map((d, j) => {
+                const i = pager.offset + j;
                 const pct = totalTokens > 0 ? (d.totalTokens / totalTokens) * 100 : 0;
                 const isWiping = wipingId === d.developerId;
                 return (
                   <tr
                     key={d.developerId}
                     className="group cursor-pointer hover:bg-canvas-alt transition-colors"
-                    style={{ borderBottom: i === devStats.length - 1 ? 'none' : '1px solid var(--line-2)' }}
+                    style={{ borderBottom: j === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)' }}
                     onClick={() => { if (!isWiping) onSelectDeveloper(d.developerId, d.displayName); }}
                   >
                     <td className="mono text-ink-4 text-[11px] px-4 py-3.5">{String(i + 1).padStart(2, '0')}</td>
@@ -236,6 +243,7 @@ export function AdminOrgPage({ onSelectDeveloper }: AdminOrgPageProps) {
             </tbody>
           </table>
         )}
+        <Pagination p={pager} />
       </div>
     </div>
   );

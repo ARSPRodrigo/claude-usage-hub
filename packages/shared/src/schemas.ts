@@ -8,6 +8,12 @@ export const usageFieldSchema = z.object({
   output_tokens: z.number().int().min(0),
   cache_creation_input_tokens: z.number().int().min(0).default(0),
   cache_read_input_tokens: z.number().int().min(0).default(0),
+  cache_creation: z
+    .object({
+      ephemeral_5m_input_tokens: z.number().int().min(0).optional(),
+      ephemeral_1h_input_tokens: z.number().int().min(0).optional(),
+    })
+    .optional(),
   service_tier: z.string().default('standard'),
 });
 
@@ -50,10 +56,13 @@ export const enrichedEntrySchema = z.object({
     outputTokens: z.number().int().min(0),
     cacheCreationTokens: z.number().int().min(0),
     cacheReadTokens: z.number().int().min(0),
+    cacheWrite5mTokens: z.number().int().min(0).optional(),
+    cacheWrite1hTokens: z.number().int().min(0).optional(),
   }),
   serviceTier: z.string(),
   developerId: z.string(),
   projectAlias: z.string(),
+  // Collector's own estimate. The server re-prices every entry, so this is ignored on ingest.
   costUsd: z.number().min(0),
 });
 

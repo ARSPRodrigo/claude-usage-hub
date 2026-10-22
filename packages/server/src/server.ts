@@ -5,6 +5,7 @@ import type { ServerConfig } from '@claude-usage-hub/shared';
 import { createApp } from './app.js';
 import { createDb } from './db/connection.js';
 import { runMigrations } from './db/migrate.js';
+import { startRepricing } from './services/reprice.js';
 import { loadServerConfig, loadAuthConfig } from './config.js';
 import { setJwtSecret, setGoogleConfig } from './middleware/auth.js';
 
@@ -41,6 +42,9 @@ export async function startServer(
     port: config.port,
     hostname: config.mode === 'local' ? '127.0.0.1' : '0.0.0.0',
   });
+
+  // Bring stored costs in line with the current pricing table, in the background.
+  startRepricing(raw).catch(() => { /* logged; resumes on next start */ });
 
   return {
     close: () => {

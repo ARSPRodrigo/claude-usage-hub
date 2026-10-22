@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Building2, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getUser, isPlatformAdmin, isWorkspaceAdmin } from '@/api/client';
-import { useOrgList, useWorkspaceList } from '@/api/hooks';
-import { useScope, setScope } from '@/lib/scope';
+import { apiGet, getUser, isPlatformAdmin, isWorkspaceAdmin } from '@/api/client';
+import { useOrgList, useWorkspaceList, type WorkspaceRow } from '@/api/hooks';
+import { useScope, setScope, getScope } from '@/lib/scope';
+
+// The built-in default workspace uses slug 'default'; orgs created later use 'default-ws'.
+const isDefaultWs = (w: WorkspaceRow) => w.slug === 'default' || w.slug === 'default-ws';
+
+/** Default workspace first, then the rest alphabetically (case-insensitive). */
+function sortWorkspaces(ws: WorkspaceRow[]): WorkspaceRow[] {
+  return [...ws].sort((a, b) =>
+    Number(isDefaultWs(b)) - Number(isDefaultWs(a)) ||
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
 
 /**
  * Two dropdowns shown in the top bar: Organization + Workspace.
@@ -15,6 +26,7 @@ import { useScope, setScope } from '@/lib/scope';
 export function OrgSwitcher() {
   const user = getUser();
   const scope = useScope();
+  const qc = useQueryClient();
 
   const isPlatform = isPlatformAdmin(user?.role);
   const isWsAdmin = isWorkspaceAdmin(user?.role);
@@ -29,6 +41,20 @@ export function OrgSwitcher() {
   // owners see it once they have at least one accessible org.
   if (!isPlatform && !isOrgOwner) return null;
   if (!isPlatform && orgs.length === 0) return null;
+
+  // Switching org lands on that org's default workspace when it has one.
+  const pickOrg = async (id: string | null) => {
+    setScope({ orgId: id, workspaceId: null });
+    if (!id) return;
+    const list = await qc.fetchQuery({
+      queryKey: ['workspaces', id],
+      queryFn: () => apiGet<WorkspaceRow[]>('/api/v1/dashboard/workspaces', { orgId: id }),
+      staleTime: 60_000,
+    });
+    const def = list.find(isDefaultWs);
+    const now = getScope();
+    if (def && now.orgId === id && now.workspaceId === null) setScope({ workspaceId: def.id });
+  };
 
   const activeOrg = orgs.find((o) => o.id === scope.orgId);
   const activeWs = workspaces.find((w) => w.id === scope.workspaceId);
@@ -45,7 +71,7 @@ export function OrgSwitcher() {
           ...(isPlatform ? [{ id: null, label: 'All organizations' }] : []),
           ...orgs.map((o) => ({ id: o.id, label: o.name })),
         ]}
-        onPick={(id) => setScope({ orgId: id, workspaceId: null })}
+        onPick={(id) => { void pickOrg(id); }}
         activeId={scope.orgId}
       />
       <Dropdown
@@ -53,7 +79,7 @@ export function OrgSwitcher() {
         label={wsLabel}
         items={[
           { id: null, label: 'All workspaces' },
-          ...workspaces.map((w) => ({ id: w.id, label: w.name })),
+          ...sortWorkspaces(workspaces).map((w) => ({ id: w.id, label: w.name })),
         ]}
         onPick={(id) => setScope({ workspaceId: id })}
         activeId={scope.workspaceId}
@@ -75,6 +101,12 @@ interface DropdownProps {
 function Dropdown({ icon: Icon, label, items, activeId, onPick, disabled }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const activeRef = useRef<HTMLButtonElement>(null);
+
+  // Keep the active item visible when the list is longer than the menu.
+  useEffect(() => {
+    if (open) activeRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [open]);
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -102,13 +134,14 @@ function Dropdown({ icon: Icon, label, items, activeId, onPick, disabled }: Drop
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 min-w-[200px] bg-surface border border-line rounded-card shadow-popover overflow-hidden z-50"
+          className="absolute right-0 top-full mt-1 min-w-[200px] bg-surface border border-line rounded-card shadow-popover max-h-[320px] overflow-y-auto z-50"
         >
           {items.map((item) => {
             const active = item.id === activeId;
             return (
               <button
                 key={item.id ?? '__all__'}
+                ref={active ? activeRef : undefined}
                 onClick={() => { onPick(item.id); setOpen(false); }}
                 className={cn(
                   'w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] text-left transition-colors',

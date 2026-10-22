@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { apiGet, getUser } from '@/api/client';
 import { TimeRangeSelector } from '@/components/layout/TimeRangeSelector';
 import { formatTokens, formatCost, formatRelative } from '@/lib/utils';
+import { usePagination } from '@/lib/usePagination';
+import { Pagination } from '@/components/Pagination';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
 
@@ -48,6 +50,7 @@ export function LeaderboardPage() {
   const totalTokens = members.reduce((s, d) => s + d.totalTokens, 0);
   const totalCost = members.reduce((s, d) => s + d.costUsd, 0);
   const maxTokens = Math.max(...members.map((d) => d.totalTokens), 1);
+  const pager = usePagination(members, range);
 
   return (
     <div>
@@ -109,7 +112,8 @@ export function LeaderboardPage() {
               </tr>
             </thead>
             <tbody>
-              {members.map((d, i) => {
+              {pager.pageItems.map((d, j) => {
+                const i = pager.offset + j;
                 const isCurrentUser = d.developerId === currentUser?.developerId;
                 const pct = totalTokens > 0 ? (d.totalTokens / totalTokens) * 100 : 0;
                 const medalColor = MEDAL_COLORS[i];
@@ -118,7 +122,7 @@ export function LeaderboardPage() {
                   <tr
                     key={d.developerId}
                     style={{
-                      borderBottom: i === members.length - 1 ? 'none' : '1px solid var(--line-2)',
+                      borderBottom: j === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)',
                       background: isCurrentUser ? 'color-mix(in oklch, var(--accent) 6%, transparent)' : undefined,
                     }}
                   >
@@ -190,6 +194,7 @@ export function LeaderboardPage() {
             </tbody>
           </table>
         )}
+        <Pagination p={pager} />
       </div>
     </div>
   );

@@ -14,6 +14,8 @@ import { ApiError } from '@/components/ApiError';
 import { useCostComparison, useAdminCostComparison } from '@/api/hooks';
 import { useScope } from '@/lib/scope';
 import { formatTokens, formatCost } from '@/lib/utils';
+import { usePagination } from '@/lib/usePagination';
+import { Pagination } from '@/components/Pagination';
 import { getTheme } from '@/lib/chart-theme';
 
 type TimeRange = '5h' | '24h' | '7d' | '30d' | 'all';
@@ -56,6 +58,7 @@ function TierSection({
   models: ComparisonEntry[];
   actualCost: number;
 }) {
+  const pager = usePagination(models);
   if (models.length === 0) return null;
   const cheapest = models[0];
   const theme = getTheme();
@@ -146,12 +149,13 @@ function TierSection({
             </tr>
           </thead>
           <tbody>
-            {models.map((c, i) => {
+            {pager.pageItems.map((c, j) => {
+              const i = pager.offset + j;
               const pct = anthropicCost > 0 ? (c.totalCost / anthropicCost) * 100 : 0;
               return (
                 <tr
                   key={c.modelId}
-                  style={{ borderBottom: i === models.length - 1 ? 'none' : '1px solid var(--line-2)' }}
+                  style={{ borderBottom: j === pager.pageItems.length - 1 ? 'none' : '1px solid var(--line-2)' }}
                 >
                   <td className="mono text-ink-4 text-[11px] px-4 py-3">{String(i + 1).padStart(2, '0')}</td>
                   <td className="px-4 py-3">
@@ -177,6 +181,7 @@ function TierSection({
             })}
           </tbody>
         </table>
+        <Pagination p={pager} />
       </div>
 
       {/* Provider legend */}
@@ -235,7 +240,7 @@ export function CostComparisonPage({ orgWide = false }: { orgWide?: boolean } = 
         style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
       >
         {[
-          { label: 'Opus Usage Cost', value: formatCost(opusCost) },
+          { label: 'Opus / Fable Usage Cost', value: formatCost(opusCost) },
           { label: 'Sonnet / Haiku Usage Cost', value: formatCost(sonnetCost) },
           { label: 'Total Actual Cost', value: formatCost(totalActualCost), highlight: true },
         ].map((s, i) => (
@@ -258,8 +263,8 @@ export function CostComparisonPage({ orgWide = false }: { orgWide?: boolean } = 
       {/* Opus tier */}
       <TierSection
         title="OPUS-CLASS · FLAGSHIP REASONING"
-        subtitle="Comparable to Claude Opus 4.6 / 4.7"
-        anthropicLabel="Opus"
+        subtitle="Compared with your Claude Opus and Fable usage"
+        anthropicLabel="Opus / Fable"
         anthropicCost={opusCost}
         models={opusModels}
         actualCost={opusCost}
@@ -268,8 +273,8 @@ export function CostComparisonPage({ orgWide = false }: { orgWide?: boolean } = 
       {/* Sonnet tier */}
       <TierSection
         title="SONNET-CLASS · DAILY-DRIVER CODING"
-        subtitle="Comparable to Claude Sonnet 4.6"
-        anthropicLabel="Sonnet"
+        subtitle="Compared with your Claude Sonnet and Haiku usage"
+        anthropicLabel="Sonnet / Haiku"
         anthropicCost={sonnetCost}
         models={sonnetModels}
         actualCost={sonnetCost}

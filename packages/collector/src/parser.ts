@@ -60,6 +60,7 @@ export async function parseJsonlFile(
       if (!parsed.success) continue;
 
       const entry = parsed.data;
+      const ttl = entry.message.usage.cache_creation;
       entries.push({
         sessionId: entry.sessionId,
         messageId: entry.message.id,
@@ -71,6 +72,8 @@ export async function parseJsonlFile(
           outputTokens: entry.message.usage.output_tokens,
           cacheCreationTokens: entry.message.usage.cache_creation_input_tokens,
           cacheReadTokens: entry.message.usage.cache_read_input_tokens,
+          ...(ttl?.ephemeral_5m_input_tokens !== undefined && { cacheWrite5mTokens: ttl.ephemeral_5m_input_tokens }),
+          ...(ttl?.ephemeral_1h_input_tokens !== undefined && { cacheWrite1hTokens: ttl.ephemeral_1h_input_tokens }),
         },
         serviceTier: entry.message.usage.service_tier,
       });

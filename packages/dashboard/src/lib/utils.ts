@@ -75,23 +75,56 @@ export function formatRelative(ts: string | number): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-export function modelShortName(model: string): string {
-  if (model.includes('opus')) return 'Opus';
-  if (model.includes('sonnet')) return 'Sonnet';
-  if (model.includes('haiku')) return 'Haiku';
-  return model;
+// Mirrors modelDisplayName / modelFamilyName in packages/shared/src/pricing.ts
+// (the dashboard doesn't depend on the shared package) — keep the two in step.
+const FAMILY_NAMES: Record<string, string> = {
+  opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku', fable: 'Fable', mythos: 'Mythos',
+};
+
+function parseModel(model: string): { family: string; version: string } | null {
+  let id = model.trim().toLowerCase();
+  const at = id.indexOf('claude-');
+  if (at < 0) return null;
+  id = id.slice(at).replace(/\[.*\]$/, '').replace(/@.*$/, '').replace(/-v\d+(:\d+)?$/, '').replace(/-\d{8}$/, '');
+  const modern = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-[a-z].*)?$/.exec(id);
+  if (modern) return { family: modern[1]!, version: [modern[2], modern[3]].filter(Boolean).join('.') };
+  const legacy = /^claude-(\d+)(?:-(\d{1,2}))?-([a-z]+)(?:-.*)?$/.exec(id);
+  if (legacy) return { family: legacy[3]!, version: [legacy[1], legacy[2]].filter(Boolean).join('.') };
+  const bare = /^claude-([a-z]+)(?:-|$)/.exec(id);
+  return bare ? { family: bare[1]!, version: '' } : null;
 }
+
+function familyLabel(family: string): string {
+  return FAMILY_NAMES[family] ?? family.charAt(0).toUpperCase() + family.slice(1);
+}
+
+/** "claude-opus-5-5" → "Opus" — for charts, which group by family. Non-Claude ids unchanged. */
+export function modelFamilyName(model: string): string {
+  const p = parseModel(model);
+  return p ? familyLabel(p.family) : model;
+}
+
+/** "claude-opus-5-5" → "Opus 5.5", "claude-haiku-4-5-20251001" → "Haiku 4.5". Non-Claude ids unchanged. */
+export function modelShortName(model: string): string {
+  const p = parseModel(model);
+  if (!p) return model;
+  return p.version ? `${familyLabel(p.family)} ${p.version}` : familyLabel(p.family);
+}
+
+const FAMILY_COLORS: Record<string, string> = {
+  Opus: 'var(--m-opus)',
+  Sonnet: 'var(--m-sonnet)',
+  Haiku: 'var(--m-haiku)',
+  Fable: 'var(--m-fable)',
+  Mythos: 'var(--m-fable)',
+};
 
 /**
  * Get inline style for a model badge — uses CSS custom properties.
+ * Accepts a family ("Opus") or a versioned name ("Opus 5.5").
  */
 export function modelBadgeStyle(name: string, _isDark?: boolean): { backgroundColor: string; color: string } {
-  const colorMap: Record<string, string> = {
-    Opus: 'var(--m-opus)',
-    Sonnet: 'var(--m-sonnet)',
-    Haiku: 'var(--m-haiku)',
-  };
-  const color = colorMap[name] ?? 'var(--ink-3)';
+  const color = FAMILY_COLORS[name.split(' ')[0]!] ?? 'var(--ink-3)';
   return {
     backgroundColor: `color-mix(in oklch, ${color} 14%, transparent)`,
     color,
@@ -99,8 +132,5 @@ export function modelBadgeStyle(name: string, _isDark?: boolean): { backgroundCo
 }
 
 export function modelColor(model: string): string {
-  if (model.includes('opus')) return 'var(--m-opus)';
-  if (model.includes('sonnet')) return 'var(--m-sonnet)';
-  if (model.includes('haiku')) return 'var(--m-haiku)';
-  return 'var(--ink-3)';
+  return FAMILY_COLORS[modelFamilyName(model)] ?? 'var(--ink-3)';
 }
